@@ -1,57 +1,78 @@
-# WINDOW — Perspective-Correct 3D Head-Tracked Display
+# Fish Tank
 
-Turn your monitor into an authentic 3D window into another room using your webcam and WebGL/Three.js. Inspired by Robert Kooima's generalized perspective projection and Guy Romm's *Window* project.
+A head-tracked 3D display for ordinary monitors. Your webcam watches your head, and the screen becomes a physical window into another room — with real motion parallax, no headset required.
 
----
-
-## What's Inside
-
-1. **Lightweight 60 FPS Face Tracking**
-   - Uses MediaPipe BlazeFace Short-Range (~450 KB), running entirely client-side on GPU.
-   - Picture-in-picture webcam thumbnail with live face detection bounding box and tracking status.
-
-2. **Auto-Baseline Distance & Position Calibration**
-   - Automatically establishes a face width baseline on first detection.
-   - **🎯 Center / Calibrate button**: Sit comfortably in your natural posture, click once, and the app snaps that as your neutral center viewpoint $(0, 0)$ at your calibrated viewing distance.
-
-3. **Kooima Off-Axis Perspective Projection**
-   - Screen bezels act as a physical aperture at $z = 0$.
-   - True motion parallax: room walls, floor, and ceiling meet the exact edges of your physical display.
-   - Look around corners, peer under tables and lamps, and see behind foreground objects.
-
-4. **3 Immersive 3D Environments**
-   - 🐟 **Living Aquarium (Fish Tank)**: Enclosed water tank with animated swimming clownfish and blue tangs, wagging tail fins, rising bubbles, sandy seabed, rocks, and caustic lighting.
-   - 🚪 **Classic Corridor**: Inspired by Guy Romm's demo, featuring a checkered tile floor, brick walls, wood ceiling, 3D table, chair, hanging lamp, and glossy sphere.
-   - ⚡ **Sci-Fi Chamber**: High-tech neon chamber with glowing holographic rings and an animated icosahedron core.
-
-5. **🥽 Stereoscopic 3D Mode (Red / Cyan Anaglyph)**
-   - Toggle with one click or press the 3D Glasses button.
-   - Dual-pass off-axis projection with standard $6.3\text{ cm}$ human inter-pupillary distance (IPD).
-   - Instant VR depth using cheap red/cyan anaglyph glasses!
-
-6. **Isometric Debug Visualizer**
-   - Real-time 3D mini-map showing your head position $(X, Y, Z)$ in centimeters, the physical screen plane, and the dynamic viewing frustum pyramid.
+Built with React 19, Three.js and MediaPipe's on-device face detector. The projection is based on Robert Kooima's generalised perspective projection: the monitor is treated as a fixed aperture at `z = 0`, and the camera's frustum is skewed every frame so its corners always match the physical screen corners.
 
 ---
 
-## Setup & Running
+## What's inside
+
+- **On-device head tracking** — BlazeFace short-range via MediaPipe. No video leaves the machine.
+- **Off-axis projection** — move your head and genuinely see around objects, through the window edges, and into the scene.
+- **Three environments** — a living aquarium with animated fish and bubbles, a warm study corridor, and a neon reactor chamber.
+- **Red / cyan stereo** — optional dual-pass anaglyph rendering using a 6.3 cm inter-pupillary distance.
+- **Physical calibration** — monitor presets, a bank-card ruler, sitting distance and motion sensitivity. Settings persist locally.
+- **Debug frustum view** — an isometric diagram of the screen, eye position and viewing frustum.
+- **Camera HUD** — live preview with a mirrored face reticle, collapsible independently of tracking.
+- **Keyboard control** — everything reachable without leaving the scene.
+
+## Running it
 
 ```powershell
-# Install dependencies
 npm install
-
-# Start local development server
 npm run dev
 ```
 
-Open `http://localhost:5173/` in Google Chrome or Microsoft Edge.
+Open the printed URL in Chrome or Edge and allow camera access. The dev server serves everything locally, including the MediaPipe WASM runtime and face model from `public/`.
 
----
+Production build:
+
+```powershell
+npm run build
+npm run preview
+```
+
+Tests (tracker maths and off-axis projection):
+
+```powershell
+npm test
+```
 
 ## Controls
 
-- **🎯 Center / Calibrate**: Calibrates your current head position as the center viewpoint.
-- **Scene Selector**: Switch between *Living Aquarium*, *Classic Corridor*, and *Sci-Fi Chamber*.
-- **🥽 3D Glasses**: Enable/disable Red/Cyan stereoscopic 3D mode.
-- **Debug View**: Toggle the real-time isometric frustum visualizer.
-- **Fullscreen**: Fill the entire screen for maximum immersion.
+| Input | Action |
+| --- | --- |
+| `1` / `2` / `3` | Aquarium / Corridor / Cyber scene |
+| `C` | Recenter the view on the current head position |
+| `S` | Toggle red / cyan stereo |
+| `D` | Toggle the isometric frustum debug view |
+| `F` | Toggle fullscreen |
+| `M` | Collapse or expand the camera preview |
+| Mouse | Use the HUD for scenes, recentering, settings and exit |
+
+The **recenter** button is useful if you shift your chair: it establishes the current head position as the neutral viewpoint. If no face is visible it resets to automatic baselining.
+
+## Display setup
+
+For the strongest illusion, set your real monitor size and eye-to-screen distance in **Display setup**. The defaults are a 24-inch monitor at 60 cm; a laptop preset or the bank-card ruler will usually be more accurate.
+
+The projection derives the horizontal view extent from the canvas aspect ratio, so the window stays geometrically correct when the browser is resized or zoomed. Physical size guesses use CSS pixels × device pixel ratio, which cancels out browser zoom.
+
+**Browser zoom note:** the previous implementation could leave a stale WebGL canvas in the DOM during React StrictMode's development double-mount, pushing the live canvas below the viewport — the scene appeared only along the bottom of the page. The rebuilt engine owns exactly one canvas, positions it absolutely inside its host, removes it through a captured container during teardown, and keeps the host itself layout-independent. It is safe to zoom and resize.
+
+## Architecture
+
+```
+src/
+  state/       Zustand app settings + throttled telemetry
+  tracking/    MediaPipe camera service and physical head-pose tracker
+  engine/      Renderer lifecycle, off-axis camera and scene factories
+  ui/          Landing, calibration, experience and HUD components
+```
+
+The engine lives outside React's render cycle. `Experience` creates one `PortalEngine` and one `FaceTrackingService` per mount, pushes scene/stereo/calibration changes through setters, and sends head samples straight to the engine. React only re-renders for UI state; the 10 Hz telemetry store feeds the HUD.
+
+## Privacy
+
+All tracking runs locally in the browser. The camera stream is used only by the face detector and the preview, is never recorded, and is released when you leave the experience.
