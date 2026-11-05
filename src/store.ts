@@ -28,9 +28,9 @@ export const useAppStore = create<AppState>((set) => ({
   calibration: {
     widthCm: 53.0,
     heightCm: 30.0,
-    distanceCm: 65.0,
+    distanceCm: 60.0,
     sensitivity: 1.0,
-    cameraOffsetYCm: 15.0, // Top bezel offset (half of screen height)
+    cameraOffsetYCm: 0.0, // Neutral center viewpoint
   },
   tracking: {
     x: 0,

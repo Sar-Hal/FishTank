@@ -4,78 +4,95 @@ import { useAppStore } from './store';
 
 // ── Screen size presets ────────────────────────────────────────────────────────
 const PRESETS = [
-  { label: '13" Laptop',       widthCm: 28.7, heightCm: 17.9 },
-  { label: '14" Laptop',       widthCm: 30.9, heightCm: 19.3 },
-  { label: '15.6" Laptop',     widthCm: 34.5, heightCm: 19.4 },
-  { label: '16" Laptop',       widthCm: 35.4, heightCm: 22.2 },
-  { label: '23" / 24" Monitor',widthCm: 52.7, heightCm: 29.6 },
-  { label: '27" Monitor',      widthCm: 59.8, heightCm: 33.6 },
-  { label: '32" Monitor',      widthCm: 70.7, heightCm: 39.8 },
-  { label: '34" Ultrawide',    widthCm: 79.8, heightCm: 33.5 },
-  { label: 'Custom…',          widthCm: 0,    heightCm: 0 },
+  { label: '13" Laptop',        widthCm: 28.7, heightCm: 17.9 },
+  { label: '14" Laptop',        widthCm: 30.9, heightCm: 19.3 },
+  { label: '15.6" Laptop',      widthCm: 34.5, heightCm: 19.4 },
+  { label: '16" Laptop',        widthCm: 35.4, heightCm: 22.2 },
+  { label: '23" / 24" Monitor', widthCm: 52.7, heightCm: 29.6 },
+  { label: '27" Monitor',       widthCm: 59.8, heightCm: 33.6 },
+  { label: '32" Monitor',       widthCm: 70.7, heightCm: 39.8 },
+  { label: '34" Ultrawide',     widthCm: 79.8, heightCm: 33.5 },
+  { label: 'Custom…',           widthCm: 0,    heightCm: 0 },
 ] as const;
 
-/** Guess the best preset from the screen's CSS pixel width.
- *  This is approximate — the user can always override. */
+/** Guess best screen preset from screen resolution */
 function guessPresetIndex(): number {
   const w = window.screen.width;
-  // CSS pixel widths roughly correlate to display class:
-  if (w <= 1440) return 0;  // small laptop
-  if (w <= 1600) return 1;  // 14"
-  if (w <= 1800) return 2;  // 15.6"
-  if (w <= 1920) return 3;  // 16" laptop or 24" monitor — pick 24" for external
-  if (w <= 2560) return 4;  // 24"
-  return 5;                 // 27" or larger
+  if (w <= 1440) return 0;
+  if (w <= 1600) return 1;
+  if (w <= 1800) return 2;
+  if (w <= 1920) return 4; // 24" desktop monitor
+  if (w <= 2560) return 5; // 27" monitor
+  return 6;                // 32" or ultrawide
 }
 
 function Landing() {
   const setStage = useAppStore((s) => s.setStage);
   const setCalibration = useAppStore((s) => s.setCalibration);
 
+  const bestPreset = PRESETS[guessPresetIndex()];
+
   const startAuto = () => {
-    const idx = guessPresetIndex();
-    const p = PRESETS[idx];
-    if (p.widthCm > 0) {
+    if (bestPreset.widthCm > 0) {
       setCalibration({
-        widthCm: p.widthCm,
-        heightCm: p.heightCm,
-        cameraOffsetYCm: p.heightCm / 2,
+        widthCm: bestPreset.widthCm,
+        heightCm: bestPreset.heightCm,
+        cameraOffsetYCm: 0, // Centered neutral viewpoint
       });
     }
     setStage('experience');
   };
 
   return (
-    <main className="landing">
-      <div className="glow" />
-      <div className="eyebrow">◈ REAL-TIME SPATIAL DISPLAY</div>
-      <h1>WINDOW<span>—</span></h1>
-      <p className="subtitle">Perspective-Correct 3D Head-Tracked Display</p>
-      <p className="intro">
-        Turn your monitor into an authentic 3D window into another room. Move your head to peer
-        around corners with true motion parallax and stereoscopic depth.
-      </p>
-      <div className="features">
-        <span>◉ BLAZEFACE 60FPS TRACKING</span>
-        <span>◉ AUTO-DISTANCE CALIBRATION</span>
-        <span>◉ RED/CYAN 3D STEREO</span>
+    <main className="landing-page">
+      <div className="landing-ambient-glow" />
+      <div className="landing-content">
+        <div className="spatial-badge">
+          <span className="badge-pulse" />
+          <span>REAL-TIME SPATIAL PORTAL</span>
+        </div>
+
+        <h1 className="landing-title">
+          WINDOW <span className="title-gradient">3D</span>
+        </h1>
+
+        <p className="landing-subtitle">
+          Turn your monitor into an authentic perspective-correct 3D window into another room.
+        </p>
+
+        <p className="landing-description">
+          Move your head to peer around corners with genuine motion parallax and depth.
+          Powered by lightweight 60 FPS on-device computer vision and Kooima off-axis projection.
+        </p>
+
+        <div className="feature-tags">
+          <span className="ftag">⚡ 60 FPS BlazeFace Tracking</span>
+          <span className="ftag">🔒 100% Private &amp; On-Device</span>
+          <span className="ftag">🥽 Red/Cyan 3D Stereo</span>
+          <span className="ftag">📐 Dynamic Off-Axis Frustum</span>
+        </div>
+
+        <div className="landing-actions">
+          <button className="cta-primary-btn" onClick={startAuto}>
+            <span>ENTER 3D PORTAL</span>
+            <span className="btn-arrow">→</span>
+          </button>
+          <button
+            className="cta-secondary-btn"
+            onClick={() => setStage('calibration')}
+          >
+            ⚙️ Display Settings
+          </button>
+        </div>
+
+        <div className="landing-specs">
+          <span className="spec-indicator" />
+          <span>Auto-detected: <b>{bestPreset.label}</b> ({bestPreset.widthCm} × {bestPreset.heightCm} cm)</span>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-        <button className="primary" onClick={startAuto}>
-          Start Experience <span>→</span>
-        </button>
-        <button
-          className="secondary-btn"
-          onClick={() => setStage('calibration')}
-        >
-          Calibrate Screen Size
-        </button>
-      </div>
-      <p className="permission">Webcam runs 100% locally in your browser to estimate eye position. No video is ever stored or uploaded.</p>
     </main>
   );
 }
-
 
 function Calibration() {
   const calibration = useAppStore((s) => s.calibration);
@@ -83,45 +100,54 @@ function Calibration() {
   const setStage = useAppStore((s) => s.setStage);
 
   const [presetIdx, setPresetIdx] = useState(() => guessPresetIndex());
-  const [cardPx, setCardPx] = useState(256); // draggable credit-card width in CSS pixels
+  const [cardPx, setCardPx] = useState(256);
   const [cardCalibrated, setCardCalibrated] = useState(false);
 
-  // Credit card physical dimensions (ISO 7810 ID-1): 85.6 mm × 54.0 mm
   const CARD_W_CM = 8.56;
   const CARD_H_CM = 5.4;
 
   function applyPreset(idx: number) {
     setPresetIdx(idx);
     const p = PRESETS[idx];
-    if (p.widthCm > 0) setCalibration({ widthCm: p.widthCm, heightCm: p.heightCm });
+    if (p.widthCm > 0) {
+      setCalibration({
+        widthCm: p.widthCm,
+        heightCm: p.heightCm,
+        cameraOffsetYCm: 0,
+      });
+    }
   }
 
-  /** Called when the user finishes dragging the card to the right size. */
   function commitCardCalibration() {
-    // cardPx CSS pixels = CARD_W_CM centimetres of physical screen width
     const cmPerPx = CARD_W_CM / cardPx;
     const widthCm = parseFloat((window.screen.width * cmPerPx).toFixed(1));
     const heightCm = parseFloat((window.screen.height * cmPerPx).toFixed(1));
-    setCalibration({ widthCm, heightCm });
+    setCalibration({ widthCm, heightCm, cameraOffsetYCm: 0 });
     setCardCalibrated(true);
-    setPresetIdx(PRESETS.length - 1); // switch selector to "Custom…"
+    setPresetIdx(PRESETS.length - 1);
   }
 
   const isCustom = PRESETS[presetIdx].widthCm === 0;
 
   return (
-    <main className="calibration">
-      <div className="panel">
-        <div className="eyebrow">◈ SYSTEM CALIBRATION</div>
-        <h2>Make the window yours.</h2>
-        <p className="muted">These measurements make the projection physically accurate.</p>
+    <main className="calib-page">
+      <div className="calib-panel">
+        <div className="calib-header">
+          <div className="spatial-badge">
+            <span className="badge-pulse" />
+            <span>DISPLAY CALIBRATION</span>
+          </div>
+          <h2>Tune Your Physical Display</h2>
+          <p className="calib-muted">
+            Matching your monitor's physical dimensions ensures 1:1 perspective projection accuracy.
+          </p>
+        </div>
 
-        {/* ── Screen size ─────────────────────────────────────────────────── */}
-        <div className="calib-section">
-          <label className="calib-label">
-            MONITOR SIZE
+        <div className="calib-group">
+          <label className="calib-label-text">
+            <span>MONITOR PRESET</span>
             <select
-              className="calib-select"
+              className="calib-select-input"
               value={presetIdx}
               onChange={(e) => applyPreset(Number(e.target.value))}
             >
@@ -132,78 +158,104 @@ function Calibration() {
           </label>
 
           {isCustom && (
-            <div className="form-grid" style={{ marginTop: 12 }}>
-              <label>
-                Screen width
-                <input type="number" value={calibration.widthCm}
-                  onChange={(e) => setCalibration({ widthCm: Number(e.target.value) })} />
-                <small>cm</small>
+            <div className="calib-grid-custom">
+              <label className="calib-input-wrap">
+                <span>Width (cm)</span>
+                <input
+                  type="number"
+                  value={calibration.widthCm}
+                  onChange={(e) => setCalibration({ widthCm: Number(e.target.value) })}
+                />
               </label>
-              <label>
-                Screen height
-                <input type="number" value={calibration.heightCm}
-                  onChange={(e) => setCalibration({ heightCm: Number(e.target.value) })} />
-                <small>cm</small>
+              <label className="calib-input-wrap">
+                <span>Height (cm)</span>
+                <input
+                  type="number"
+                  value={calibration.heightCm}
+                  onChange={(e) => setCalibration({ heightCm: Number(e.target.value) })}
+                />
               </label>
             </div>
           )}
 
-          <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
-            Detected: {calibration.widthCm} × {calibration.heightCm} cm
-          </p>
+          <div className="detected-readout">
+            Current dimension: <b>{calibration.widthCm} × {calibration.heightCm} cm</b>
+          </div>
         </div>
 
-        {/* ── Credit-card calibration ──────────────────────────────────────── */}
-        <div className="calib-section card-section">
-          <p className="calib-label">VERIFY WITH A CREDIT CARD (optional)</p>
-          <p className="muted" style={{ fontSize: 11 }}>
-            Drag the right edge of the rectangle until it matches a real credit card held up to the screen, then press <em>Lock in</em>.
+        <div className="calib-group">
+          <span className="calib-label-text">PRECISION CREDIT CARD RULER (OPTIONAL)</span>
+          <p className="calib-muted-small">
+            Hold a standard credit card against the screen and adjust the slider until the box matches exactly.
           </p>
-          <div className="card-ruler-wrap">
+          <div className="card-ruler-container">
             <div
-              className="card-ruler"
+              className="card-ruler-box"
               style={{ width: cardPx, aspectRatio: `${CARD_W_CM} / ${CARD_H_CM}` }}
             >
-              <span className="card-label">credit card</span>
+              <span>CREDIT CARD (8.56 × 5.4 CM)</span>
             </div>
-            {/* simple drag handle */}
             <input
-              type="range" min={80} max={600} value={cardPx}
-              onChange={(e) => { setCardPx(Number(e.target.value)); setCardCalibrated(false); }}
-              style={{ width: '100%', marginTop: 8, accentColor: '#7dffe1' }}
-              aria-label="Resize card"
+              type="range"
+              min={80}
+              max={600}
+              value={cardPx}
+              onChange={(e) => {
+                setCardPx(Number(e.target.value));
+                setCardCalibrated(false);
+              }}
+              className="modern-range"
             />
             <button
-              className={`calib-lock-btn ${cardCalibrated ? 'locked' : ''}`}
+              className={`lock-card-btn ${cardCalibrated ? 'locked' : ''}`}
               onClick={commitCardCalibration}
             >
-              {cardCalibrated ? '✓ Locked in' : 'Lock in'}
+              {cardCalibrated ? '✓ Locked In' : 'Lock In Card Calibration'}
             </button>
           </div>
         </div>
 
-        {/* ── Eye distance ─────────────────────────────────────────────────── */}
-        <label className="range" style={{ marginTop: 20 }}>
-          EYE-TO-SCREEN DISTANCE
-          <input type="range" min={30} max={120} step={1} value={calibration.distanceCm}
-            onChange={(e) => setCalibration({ distanceCm: Number(e.target.value) })} />
-          <span>{calibration.distanceCm} cm</span>
-        </label>
+        <div className="calib-group">
+          <label className="calib-slider-row">
+            <span>SITTING DISTANCE</span>
+            <b>{calibration.distanceCm} cm</b>
+          </label>
+          <input
+            type="range"
+            min={30}
+            max={120}
+            step={1}
+            value={calibration.distanceCm}
+            onChange={(e) => setCalibration({ distanceCm: Number(e.target.value) })}
+            className="modern-range"
+          />
+        </div>
 
-        {/* ── Sensitivity ──────────────────────────────────────────────────── */}
-        <label className="range">
-          TRACKING SENSITIVITY
-          <input type="range" min={0.5} max={1.8} step={0.05} value={calibration.sensitivity}
-            onChange={(e) => setCalibration({ sensitivity: Number(e.target.value) })} />
-          <span>{calibration.sensitivity.toFixed(2)}×</span>
-        </label>
+        <div className="calib-group">
+          <label className="calib-slider-row">
+            <span>TRACKING SENSITIVITY</span>
+            <b>{calibration.sensitivity.toFixed(2)}×</b>
+          </label>
+          <input
+            type="range"
+            min={0.5}
+            max={2.0}
+            step={0.05}
+            value={calibration.sensitivity}
+            onChange={(e) => setCalibration({ sensitivity: Number(e.target.value) })}
+            className="modern-range"
+          />
+        </div>
 
-        <button className="primary" style={{ marginTop: 28, width: '100%' }} onClick={() => setStage('experience')}>
-          Enable camera <span>→</span>
-        </button>
-        <button className="text-button" onClick={() => setStage('experience')}>
-          Continue in fallback mode
-        </button>
+        <div className="calib-actions">
+          <button className="cta-primary-btn" onClick={() => setStage('experience')}>
+            <span>Launch Experience</span>
+            <span className="btn-arrow">→</span>
+          </button>
+          <button className="cta-back-btn" onClick={() => setStage('landing')}>
+            ← Back to Home
+          </button>
+        </div>
       </div>
     </main>
   );

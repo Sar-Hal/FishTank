@@ -21,6 +21,7 @@ export function Experience() {
   const [status, setStatus] = useState('Starting camera…');
   const [error, setError] = useState('');
   const [calibrated, setCalibrated] = useState(false);
+  const [pipMinimized, setPipMinimized] = useState(false);
 
   const setTracking = useAppStore((s) => s.setTracking);
   const tracking = useAppStore((s) => s.tracking);
@@ -34,10 +35,18 @@ export function Experience() {
   const handleManualCalibrate = () => {
     trackerRef.current.calibrate();
     setCalibrated(true);
-    setStatus('Centered & Calibrated!');
+    setStatus('View Centered!');
     setTimeout(() => {
-      setStatus('Tracking active');
+      setStatus('Tracking Active');
     }, 1500);
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -60,7 +69,7 @@ export function Experience() {
       } catch (camErr) {
         console.error('Camera access failed:', camErr);
         setError('Camera permission denied. Please allow camera access in your browser.');
-        setStatus('Fallback mode');
+        setStatus('Fallback Mode');
         const fallback = tracker.update(null, useAppStore.getState().calibration);
         setTracking(fallback);
         return;
@@ -69,9 +78,8 @@ export function Experience() {
       // 2. Load Vision Model (Local first, CDN fallback, GPU with CPU fallback)
       let detector: FaceDetector;
       try {
-        setStatus('Loading face tracking model…');
+        setStatus('Loading vision model…');
 
-        // Resolve WASM files
         let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
         try {
           vision = await FilesetResolver.forVisionTasks(LOCAL_WASM);
@@ -80,7 +88,6 @@ export function Experience() {
           vision = await FilesetResolver.forVisionTasks(CDN_WASM);
         }
 
-        // Create Detector (Try GPU first, then CPU)
         try {
           detector = await FaceDetector.createFromOptions(vision, {
             baseOptions: { modelAssetPath: LOCAL_MODEL, delegate: 'GPU' },
@@ -105,12 +112,12 @@ export function Experience() {
           }
         }
 
-        setStatus('Tracking active');
+        setStatus('Tracking Active');
         setError('');
       } catch (modelErr) {
         console.error('Vision model loading failed:', modelErr);
         setError('Face tracking model failed to load. Running in centered view.');
-        setStatus('Fallback mode');
+        setStatus('Fallback Mode');
         const fallback = tracker.update(null, useAppStore.getState().calibration);
         setTracking(fallback);
         return;
@@ -128,21 +135,52 @@ export function Experience() {
             const result = detector.detectForVideo(video.current, now);
             const det = result.detections[0];
 
-            // Draw bounding box on PiP overlay canvas
+            // Draw sci-fi reticle on PiP overlay canvas
             if (overlayCanvas.current) {
               const ctx = overlayCanvas.current.getContext('2d');
               if (ctx) {
                 ctx.clearRect(0, 0, overlayCanvas.current.width, overlayCanvas.current.height);
                 if (det && det.boundingBox) {
                   const b = det.boundingBox;
-                  ctx.strokeStyle = '#22d3ee';
-                  ctx.lineWidth = 3;
-                  ctx.strokeRect(b.originX, b.originY, b.width, b.height);
+                  const corner = Math.min(b.width, b.height) * 0.25;
 
-                  // Center dot
+                  ctx.strokeStyle = '#22d3ee';
+                  ctx.lineWidth = 2.5;
+
+                  // Top-left corner bracket
+                  ctx.beginPath();
+                  ctx.moveTo(b.originX, b.originY + corner);
+                  ctx.lineTo(b.originX, b.originY);
+                  ctx.lineTo(b.originX + corner, b.originY);
+                  ctx.stroke();
+
+                  // Top-right corner bracket
+                  ctx.beginPath();
+                  ctx.moveTo(b.originX + b.width - corner, b.originY);
+                  ctx.lineTo(b.originX + b.width, b.originY);
+                  ctx.lineTo(b.originX + b.width, b.originY + corner);
+                  ctx.stroke();
+
+                  // Bottom-left corner bracket
+                  ctx.beginPath();
+                  ctx.moveTo(b.originX, b.originY + b.height - corner);
+                  ctx.lineTo(b.originX, b.originY + b.height);
+                  ctx.lineTo(b.originX + corner, b.originY + b.height);
+                  ctx.stroke();
+
+                  // Bottom-right corner bracket
+                  ctx.beginPath();
+                  ctx.moveTo(b.originX + b.width - corner, b.originY + b.height);
+                  ctx.lineTo(b.originX + b.width, b.originY + b.height);
+                  ctx.lineTo(b.originX + b.width, b.originY + b.height - corner);
+                  ctx.stroke();
+
+                  // Center reticle
+                  const cx = b.originX + b.width / 2;
+                  const cy = b.originY + b.height / 2;
                   ctx.fillStyle = '#f43f5e';
                   ctx.beginPath();
-                  ctx.arc(b.originX + b.width / 2, b.originY + b.height / 2, 5, 0, Math.PI * 2);
+                  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
                   ctx.fill();
                 }
               }
@@ -191,78 +229,132 @@ export function Experience() {
     <main className="experience">
       <PortalCanvas key={`${scene}-${stereoscopic}`} />
 
-      {/* Camera Picture-in-Picture with live face tracking box */}
-      <div className="camera-pip-wrap">
-        <video ref={video} className="camera-video" muted playsInline />
-        <canvas ref={overlayCanvas} width={640} height={480} className="camera-overlay" />
-        <div className="camera-pip-label">
-          <span className={`status-dot ${tracking.visible ? 'live' : ''}`} />
-          {tracking.visible ? 'TRACKING FACE' : 'SEARCHING FACE...'}
-        </div>
-      </div>
-
-      {/* Floating Top Control Bar */}
-      <div className="experience-bar">
-        <div className="status-badge">
-          <span className={`status-dot ${tracking.visible ? 'live' : ''}`} />
-          <span>{status}</span>
+      {/* ── Modern Floating Island HUD ─────────────────────────────────────── */}
+      <header className="hud-island">
+        {/* Live Status Pill */}
+        <div className="hud-status">
+          <span className={`hud-dot ${tracking.visible ? 'live' : ''}`} />
+          <span className="hud-status-text">{status}</span>
         </div>
 
-        {/* 🎯 One-click Calibrate / Center Button */}
+        {/* 🎯 Quick Center / Calibrate */}
         <button
-          className="calibrate-btn"
+          className="hud-btn hud-btn-primary"
           onClick={handleManualCalibrate}
-          title="Sit comfortably and click to center the 3D window"
+          title="Sit comfortably looking at screen center and click to recalibrate"
         >
-          🎯 Center / Calibrate
+          <span className="hud-btn-icon">🎯</span>
+          <span>Center View</span>
         </button>
 
-        {/* Scene Switcher */}
-        <select
-          value={scene}
-          onChange={(e) => setScene(e.target.value as typeof scene)}
-          aria-label="Scene"
-        >
-          <option value="aquarium">🐟 Living Aquarium</option>
-          <option value="corridor">🚪 Classic Corridor</option>
-          <option value="portal">⚡ Sci-Fi Chamber</option>
-        </select>
+        {/* Segmented Scene Selector */}
+        <div className="segmented-scenes" role="tablist" aria-label="3D Environments">
+          <button
+            className={`seg-btn ${scene === 'aquarium' ? 'active' : ''}`}
+            onClick={() => setScene('aquarium')}
+          >
+            🐠 Aquarium
+          </button>
+          <button
+            className={`seg-btn ${scene === 'corridor' ? 'active' : ''}`}
+            onClick={() => setScene('corridor')}
+          >
+            🏛️ Corridor
+          </button>
+          <button
+            className={`seg-btn ${scene === 'portal' ? 'active' : ''}`}
+            onClick={() => setScene('portal')}
+          >
+            ⚡ Cyber
+          </button>
+        </div>
 
-        {/* 🥽 3D Glasses Anaglyph Mode */}
+        {/* 🥽 3D Glasses Stereo Mode */}
         <button
-          className={`stereo-btn ${stereoscopic ? 'active' : ''}`}
+          className={`hud-btn hud-btn-stereo ${stereoscopic ? 'active' : ''}`}
           onClick={() => setStereoscopic(!stereoscopic)}
-          title="Toggle Red/Cyan 3D Anaglyph Mode"
+          title="Toggle Red/Cyan 3D Anaglyph Stereoscopic Mode"
         >
-          {stereoscopic ? '🥽 3D Glasses: ON' : '🥽 3D Glasses'}
+          <span className="hud-btn-icon">🥽</span>
+          <span>{stereoscopic ? '3D Active' : '3D Glasses'}</span>
         </button>
 
-        {/* Debug 3D Frustum Visualizer */}
+        {/* Frustum Debug Visualizer */}
         <button
-          className={debug ? 'active' : ''}
+          className={`hud-btn ${debug ? 'active' : ''}`}
           onClick={() => setDebug(!debug)}
+          title="Toggle Isometric 3D Frustum Visualizer"
         >
-          {debug ? 'Hide Debug' : 'Debug View'}
+          <span className="hud-btn-icon">📐</span>
+          <span>Frustum</span>
         </button>
 
-        <button onClick={() => document.documentElement.requestFullscreen?.()}>
-          Fullscreen
+        {/* Fullscreen Toggle */}
+        <button
+          className="hud-btn"
+          onClick={toggleFullscreen}
+          title="Toggle Edge-to-Edge Fullscreen"
+        >
+          <span className="hud-btn-icon">⛶</span>
         </button>
+      </header>
+
+      {/* ── Collapsible Picture-in-Picture Camera ──────────────────────────── */}
+      <div className={`camera-pip ${pipMinimized ? 'minimized' : ''}`}>
+        <div className="pip-header">
+          <div className="pip-title">
+            <span className={`hud-dot ${tracking.visible ? 'live' : ''}`} />
+            <span>{tracking.visible ? 'FACE TRACKED' : 'SEARCHING…'}</span>
+          </div>
+          <button
+            className="pip-toggle"
+            onClick={() => setPipMinimized(!pipMinimized)}
+            title={pipMinimized ? 'Expand Camera Preview' : 'Minimize Camera'}
+          >
+            {pipMinimized ? '▲' : '▼'}
+          </button>
+        </div>
+        {!pipMinimized && (
+          <div className="pip-viewport">
+            <video ref={video} className="pip-video" muted playsInline />
+            <canvas ref={overlayCanvas} width={640} height={480} className="pip-overlay" />
+          </div>
+        )}
       </div>
 
-      {error && <div className="toast">{error}</div>}
-
-      {/* Floating coordinates badge */}
+      {/* ── Floating Coordinates Glass Card ───────────────────────────────── */}
       {debug && (
-        <aside className="debug-panel">
-          <strong>HEAD TRACKING (CM)</strong>
-          <span>X (Horiz) <b>{tracking.x.toFixed(1)} cm</b></span>
-          <span>Y (Vert) <b>{tracking.y.toFixed(1)} cm</b></span>
-          <span>Z (Dist) <b>{tracking.z.toFixed(1)} cm</b></span>
-          <span>Frustum <b>Kooima Off-Axis</b></span>
-          <span>Stereo <b>{stereoscopic ? 'Red/Cyan' : 'Mono'}</b></span>
+        <aside className="frustum-hud-card">
+          <div className="hud-card-header">
+            <strong>PERSPECTIVE TELEMETRY</strong>
+            <button className="hud-card-close" onClick={() => setDebug(false)}>✕</button>
+          </div>
+          <div className="telemetry-grid">
+            <div className="telemetry-row">
+              <span className="t-label">Eye X (Horiz)</span>
+              <span className="t-val">{tracking.x >= 0 ? `+${tracking.x.toFixed(1)}` : tracking.x.toFixed(1)} cm</span>
+            </div>
+            <div className="telemetry-row">
+              <span className="t-label">Eye Y (Vert)</span>
+              <span className="t-val">{tracking.y >= 0 ? `+${tracking.y.toFixed(1)}` : tracking.y.toFixed(1)} cm</span>
+            </div>
+            <div className="telemetry-row">
+              <span className="t-label">Eye Z (Dist)</span>
+              <span className="t-val">{tracking.z.toFixed(1)} cm</span>
+            </div>
+            <div className="telemetry-row">
+              <span className="t-label">Frustum Model</span>
+              <span className="t-val highlight">Kooima Off-Axis</span>
+            </div>
+            <div className="telemetry-row">
+              <span className="t-label">Stereo Mode</span>
+              <span className="t-val">{stereoscopic ? 'Red/Cyan Anaglyph' : 'Monocular'}</span>
+            </div>
+          </div>
         </aside>
       )}
+
+      {error && <div className="toast-banner">{error}</div>}
     </main>
   );
 }

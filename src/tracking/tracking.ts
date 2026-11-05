@@ -29,6 +29,9 @@ export class HeadTracker {
   private baselineFaceWidth: number | null = null;
   private centerFaceX: number = 0.5;
   private centerFaceY: number = 0.5;
+  private lastFaceX: number = 0.5;
+  private lastFaceY: number = 0.5;
+  private lastFaceWidth: number = 0.2;
   private positionHistory: HistoryEntry[] = [];
   private smoothingWindowMs: number = 200; // 200ms time-weighted window
   private currentPosition: TrackingPoint = { ...DEFAULT_TRACKING };
@@ -43,16 +46,23 @@ export class HeadTracker {
    * and sets current face width as the baseline for the calibrated distance.
    */
   public calibrate(faceX?: number, faceY?: number, faceWidth?: number) {
-    if (faceX !== undefined && faceY !== undefined && faceWidth !== undefined && faceWidth > 0.05) {
-      this.centerFaceX = faceX;
-      this.centerFaceY = faceY;
-      this.baselineFaceWidth = faceWidth;
+    const fx = faceX !== undefined ? faceX : this.lastFaceX;
+    const fy = faceY !== undefined ? faceY : this.lastFaceY;
+    const fw = faceWidth !== undefined ? faceWidth : this.lastFaceWidth;
+
+    if (fw > 0.04) {
+      this.centerFaceX = fx;
+      this.centerFaceY = fy;
+      this.baselineFaceWidth = fw;
     } else {
       this.baselineFaceWidth = null;
       this.centerFaceX = 0.5;
       this.centerFaceY = 0.5;
     }
     this.positionHistory = [];
+    this.currentPosition.x = 0;
+    this.currentPosition.y = 0;
+    this.currentPosition.z = 60;
   }
 
   public get isCalibrated(): boolean {
@@ -76,7 +86,7 @@ export class HeadTracker {
     },
     currentTime = performance.now(),
   ): TrackingPoint {
-    const { widthCm, heightCm, distanceCm, cameraOffsetYCm = 15, sensitivity = 1.0 } = calibration;
+    const { widthCm, heightCm, distanceCm, cameraOffsetYCm = 0, sensitivity = 1.0 } = calibration;
 
     if (!detection || detection.faceWidth < 0.04) {
       // Face not detected — smoothly decay towards neutral center (0, 0, distanceCm)
@@ -96,6 +106,9 @@ export class HeadTracker {
 
     this.invisibleFrames = 0;
     const { faceX, faceY, faceWidth } = detection;
+    this.lastFaceX = faceX;
+    this.lastFaceY = faceY;
+    this.lastFaceWidth = faceWidth;
 
     // Auto-calibrate baseline on the first clear face detection
     if (this.baselineFaceWidth === null && faceWidth > 0.06) {
@@ -117,8 +130,8 @@ export class HeadTracker {
     const vertOffset = this.centerFaceY - faceY; // positive when user moves head up
 
     // Physical centimeters on the screen plane scaled by sensitivity
-    const rawX = -horizOffset * widthCm * sensitivity * 1.5;
-    const rawY = vertOffset * heightCm * sensitivity * 1.5 + (cameraOffsetYCm || 0);
+    const rawX = -horizOffset * widthCm * sensitivity;
+    const rawY = vertOffset * heightCm * sensitivity + (cameraOffsetYCm || 0);
 
     // 3. Time-weighted Moving Average (200ms window)
     this.positionHistory.push({

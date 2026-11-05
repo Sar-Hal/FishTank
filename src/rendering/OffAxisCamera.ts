@@ -29,12 +29,15 @@ export function updateOffAxisProjection(
   camera: THREE.Camera,
   tracking: TrackingPoint,
   screen: ScreenCalibration,
+  aspectRatio?: number,
   eyeOffsetCm = 0, // for stereoscopic vision (-EYE_SEPARATION/2 or +EYE_SEPARATION/2)
   near = 1.0,      // 1 cm in front of eye
   far = 5000.0,    // 50 meters back
 ) {
-  const hw = screen.widthCm / 2;
   const hh = screen.heightCm / 2;
+  // When aspectRatio is provided (canvas width / canvas height), dynamically
+  // adjust hw so the frustum spans the full screen without distortion or letterboxing
+  const hw = aspectRatio && aspectRatio > 0 ? hh * aspectRatio : screen.widthCm / 2;
 
   // Eye position in cm
   const eyeX = tracking.x + eyeOffsetCm;
