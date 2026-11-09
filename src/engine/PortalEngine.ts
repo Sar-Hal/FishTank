@@ -6,6 +6,7 @@ import { applyOffAxisProjection, EYE_SEPARATION_CM } from './OffAxisCamera';
 import { createAquarium } from './scenes/aquarium';
 import { createCorridor } from './scenes/corridor';
 import { createCyber } from './scenes/cyber';
+import { createMirror } from './scenes/mirror';
 import { disposeObject } from './scenes/utils';
 import type { Environment } from './scenes/types';
 
@@ -19,6 +20,8 @@ const createEnvironment = (sceneId: SceneId): Environment => {
       return createCorridor();
     case 'cyber':
       return createCyber();
+    case 'mirror':
+      return createMirror();
     case 'aquarium':
     default:
       return createAquarium();

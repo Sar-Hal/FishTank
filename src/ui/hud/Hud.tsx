@@ -6,6 +6,7 @@ import { TelemetryPanel } from './TelemetryPanel';
 import { exitFullscreenIfNeeded, toggleFullscreen } from './fullscreen';
 
 interface HudProps {
+  hidden: boolean;
   status: TrackingStatus;
   statusMessage: string;
   error: string | null;
@@ -33,6 +34,7 @@ type IconName =
   | 'stereo'
   | 'debug'
   | 'camera'
+  | 'hide'
   | 'fullscreen'
   | 'settings'
   | 'exit';
@@ -74,6 +76,13 @@ function Icon({ name }: { name: IconName }) {
           <path d="M15.8 10.5l4.3-2.4a.6.6 0 0 1 .9.5v6.8a.6.6 0 0 1-.9.5l-4.3-2.4" {...common} />
         </>
       )}
+      {name === 'hide' && (
+        <>
+          <path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12Z" {...common} />
+          <circle cx="12" cy="12" r="2.7" {...common} />
+          <path d="M4.2 4.2l15.6 15.6" {...common} />
+        </>
+      )}
       {name === 'fullscreen' && (
         <path
           d="M8.5 3.5h-5v5M15.5 3.5h5v5M20.5 15.5v5h-5M3.5 15.5v5h5"
@@ -98,6 +107,7 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export function Hud({
+  hidden,
   status,
   statusMessage,
   error,
@@ -114,6 +124,7 @@ export function Hud({
   const setDebug = useAppStore((state) => state.setDebug);
   const pipCollapsed = useAppStore((state) => state.pipCollapsed);
   const setPipCollapsed = useAppStore((state) => state.setPipCollapsed);
+  const setUiHidden = useAppStore((state) => state.setUiHidden);
   const setStage = useAppStore((state) => state.setStage);
 
   const meta = STATUS_META[status];
@@ -124,7 +135,11 @@ export function Hud({
   };
 
   return (
-    <div className="hud">
+    <div
+      className={`hud ${hidden ? 'hud--hidden' : ''}`}
+      aria-hidden={hidden || undefined}
+      inert={hidden || undefined}
+    >
       <div className="hud-top">
         <div className="hud-brand glass">
           <span className="hud-brand-mark" aria-hidden="true">
@@ -198,6 +213,15 @@ export function Hud({
           >
             <Icon name="camera" />
           </button>
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => setUiHidden(true)}
+            title="Hide everything but the scene (H)"
+            aria-label="Hide all controls"
+          >
+            <Icon name="hide" />
+          </button>
 
           <span className="hud-divider" aria-hidden="true" />
 
@@ -257,7 +281,7 @@ export function Hud({
         <div className="hud-bottom">
           <div className="hud-shortcuts" aria-hidden="true">
             <span>
-              <kbd>1</kbd>–<kbd>3</kbd> scenes
+              <kbd>1</kbd>–<kbd>4</kbd> scenes
             </span>
             <span>
               <kbd>C</kbd> recenter
@@ -273,6 +297,9 @@ export function Hud({
             </span>
             <span>
               <kbd>M</kbd> camera
+            </span>
+            <span>
+              <kbd>H</kbd> hide UI
             </span>
           </div>
 

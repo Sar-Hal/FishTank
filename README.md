@@ -10,7 +10,7 @@ Built with React 19, Three.js and MediaPipe's on-device face detector. The proje
 
 - **On-device head tracking** — BlazeFace short-range via MediaPipe. No video leaves the machine.
 - **Off-axis projection** — move your head and genuinely see around objects, through the window edges, and into the scene.
-- **Three environments** — a living aquarium with animated fish and bubbles, a warm study corridor, and a neon reactor chamber.
+- **Four environments** — a living aquarium with animated fish and bubbles, a warm study corridor, a neon reactor chamber, and an infinite screenshare tunnel.
 - **Red / cyan stereo** — optional dual-pass anaglyph rendering using a 6.3 cm inter-pupillary distance.
 - **Physical calibration** — monitor presets, a bank-card ruler, sitting distance and motion sensitivity. Settings persist locally.
 - **Debug frustum view** — an isometric diagram of the screen, eye position and viewing frustum.
@@ -43,13 +43,17 @@ npm test
 
 | Input | Action |
 | --- | --- |
-| `1` / `2` / `3` | Aquarium / Corridor / Cyber scene |
+| `1` / `2` / `3` / `4` | Aquarium / Corridor / Cyber / Infinity scene |
 | `C` | Recenter the view on the current head position |
 | `S` | Toggle red / cyan stereo |
 | `D` | Toggle the isometric frustum debug view |
 | `F` | Toggle fullscreen |
 | `M` | Collapse or expand the camera preview |
+| `H` | Hide every HUD element, leaving only the scene |
+| `Esc` | Restore the HUD when it is hidden |
 | Mouse | Use the HUD for scenes, recentering, settings and exit |
+
+The **hide UI** button (crossed-out eye) leaves the scene untouched and fades the whole HUD away. Press `H` or `Esc` to bring it back, or click/tap the scene. A short hint appears for a few seconds when the HUD first disappears.
 
 The **recenter** button is useful if you shift your chair: it establishes the current head position as the neutral viewpoint. If no face is visible it resets to automatic baselining.
 

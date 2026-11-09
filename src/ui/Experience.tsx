@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PortalEngine } from '../engine/PortalEngine';
 import { useAppStore } from '../state/appStore';
+import type { SceneId } from '../state/appStore';
 import { useTelemetryStore } from '../state/telemetryStore';
 import { FaceTrackingService } from '../tracking/FaceTrackingService';
 import { HeadTracker } from '../tracking/HeadTracker';
@@ -19,10 +20,11 @@ const INITIAL_STATUS: TrackingState = {
   message: 'Preparing the camera…',
 };
 
-const SCENE_KEYS: Record<string, 'aquarium' | 'corridor' | 'cyber'> = {
+const SCENE_KEYS: Record<string, SceneId> = {
   '1': 'aquarium',
   '2': 'corridor',
   '3': 'cyber',
+  '4': 'mirror',
 };
 
 export function Experience() {
@@ -38,6 +40,7 @@ export function Experience() {
   const calibration = useAppStore((state) => state.calibration);
   const scene = useAppStore((state) => state.scene);
   const stereo = useAppStore((state) => state.stereo);
+  const uiHidden = useAppStore((state) => state.uiHidden);
 
   // Engine + tracking lifecycle. This effect is intentionally declared first so
   // the engine exists before the setters below run. The host element is
@@ -168,6 +171,10 @@ export function Experience() {
         state.setScene(SCENE_KEYS[key]);
       } else if (key === 'c') {
         recenter();
+      } else if (key === 'h') {
+        state.toggleUiHidden();
+      } else if (key === 'escape' && state.uiHidden) {
+        state.setUiHidden(false);
       } else if (key === 's') {
         state.setStereo(!state.stereo);
       } else if (key === 'd') {
@@ -188,9 +195,15 @@ export function Experience() {
   }, [recenter]);
 
   return (
-    <div className="experience">
+    <div
+      className="experience"
+      onPointerDown={() => {
+        if (useAppStore.getState().uiHidden) useAppStore.getState().setUiHidden(false);
+      }}
+    >
       <div ref={hostRef} className="engine-host" />
       <Hud
+        hidden={uiHidden}
         status={tracking.status}
         statusMessage={tracking.message}
         error={error}
@@ -199,6 +212,11 @@ export function Experience() {
         onRecenter={recenter}
         onDismissError={() => setError(null)}
       />
+      {uiHidden && (
+        <div className="immersive-hint" role="status">
+          Press <kbd>H</kbd> or <kbd>Esc</kbd> — or tap — to show controls
+        </div>
+      )}
     </div>
   );
 }

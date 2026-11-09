@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type Stage = 'landing' | 'calibration' | 'experience';
-export type SceneId = 'aquarium' | 'corridor' | 'cyber';
+export type SceneId = 'aquarium' | 'corridor' | 'cyber' | 'mirror';
 
 export interface Calibration {
   /** Physical width of the display in centimetres. */
@@ -30,6 +30,7 @@ export const SCENES: ReadonlyArray<{
   { id: 'aquarium', label: 'Aquarium', icon: '🐠', hint: 'A living coral reef' },
   { id: 'corridor', label: 'Corridor', icon: '🏛️', hint: 'A study in warm light' },
   { id: 'cyber', label: 'Cyber', icon: '⚡', hint: 'A neon reactor chamber' },
+  { id: 'mirror', label: 'Infinity', icon: '🪞', hint: 'A screenshare inside a screenshare' },
 ];
 
 interface AppState {
@@ -39,12 +40,16 @@ interface AppState {
   stereo: boolean;
   debug: boolean;
   pipCollapsed: boolean;
+  /** Hides every HUD element so only the scene remains. */
+  uiHidden: boolean;
   setStage: (stage: Stage) => void;
   setCalibration: (value: Partial<Calibration>) => void;
   setScene: (scene: SceneId) => void;
   setStereo: (stereo: boolean) => void;
   setDebug: (debug: boolean) => void;
   setPipCollapsed: (collapsed: boolean) => void;
+  setUiHidden: (hidden: boolean) => void;
+  toggleUiHidden: () => void;
 }
 
 const STORAGE_KEY = 'fishtank:settings:v1';
@@ -55,7 +60,7 @@ const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 const isSceneId = (value: unknown): value is SceneId =>
-  value === 'aquarium' || value === 'corridor' || value === 'cyber';
+  value === 'aquarium' || value === 'corridor' || value === 'cyber' || value === 'mirror';
 
 type PersistedSettings = Pick<AppState, 'calibration' | 'scene'>;
 
@@ -108,6 +113,7 @@ export const useAppStore = create<AppState>((set) => ({
   stereo: false,
   debug: false,
   pipCollapsed: false,
+  uiHidden: false,
 
   setStage: (stage) => set({ stage }),
 
@@ -127,4 +133,6 @@ export const useAppStore = create<AppState>((set) => ({
   setStereo: (stereo) => set({ stereo }),
   setDebug: (debug) => set({ debug }),
   setPipCollapsed: (pipCollapsed) => set({ pipCollapsed }),
+  setUiHidden: (uiHidden) => set({ uiHidden }),
+  toggleUiHidden: () => set((state) => ({ uiHidden: !state.uiHidden })),
 }));
