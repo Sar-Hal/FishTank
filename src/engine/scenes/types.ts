@@ -5,6 +5,7 @@ export interface Environment {
   background: THREE.Color;
   fog: THREE.Fog | null;
   update: (dt: number, elapsed: number) => void;
+  dispose?: () => void;
 }
 
 export type SceneFactory = () => Environment;

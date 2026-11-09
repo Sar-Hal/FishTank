@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { screenCaptureService } from './screenCapture';
 import { createCursorTexture, createScreenshareTexture } from './screenShareTexture';
 import type { Environment } from './types';
 
@@ -7,8 +8,12 @@ import type { Environment } from './types';
  *
  * A giant holographic display floats in a dark gallery. Behind it, seven echo
  * panels repeat the same share, shrinking with depth. The panels use additive
- * blending so the bright UI shines through the layers in front of it, while
- * solid bezels keep every echo reading as a physical screen.
+ * rim strips and tinted content layers so the bright UI shines through into depth,
+ * while solid bezels keep every echo reading as a physical screen.
+ *
+ * Supports live screensharing via navigator.mediaDevices.getDisplayMedia:
+ * when the user shares their screen or FishTank tab, it creates an infinite
+ * feedback loop (Droste effect) that moves and skews with perspective head tracking!
  */
 
 const ROOM = { width: 760, height: 360, depth: 1600 };
@@ -23,10 +28,12 @@ const ECHO_SCALE = 0.72;
 const SCREEN_ASPECT = 9 / 16;
 
 interface EchoScreen {
+  group: THREE.Group;
   content: THREE.MeshBasicMaterial;
   rim: THREE.MeshBasicMaterial;
   baseOpacity: number;
   phase: number;
+  isMain?: boolean;
 }
 
 function screenHeight(width: number): number {
@@ -38,6 +45,7 @@ function buildScreen(
   tint: THREE.Color,
   opacity: number,
   texture: THREE.Texture,
+  isMain = false,
 ): { group: THREE.Group; echo: EchoScreen } {
   const group = new THREE.Group();
   const height = screenHeight(width);
@@ -46,11 +54,11 @@ function buildScreen(
 
   const contentMaterial = new THREE.MeshBasicMaterial({
     map: texture,
-    transparent: true,
+    transparent: opacity < 1,
     opacity,
-    color: tint.clone().lerp(new THREE.Color(0xffffff), 0.55),
+    color: isMain ? new THREE.Color(0xffffff) : tint.clone().lerp(new THREE.Color(0xffffff), 0.55),
     blending: THREE.NormalBlending,
-    depthWrite: false,
+    depthWrite: isMain,
     toneMapped: false,
   });
   const content = new THREE.Mesh(new THREE.PlaneGeometry(width, height), contentMaterial);
@@ -109,10 +117,12 @@ function buildScreen(
   return {
     group,
     echo: {
+      group,
       content: contentMaterial,
       rim: rimMaterial,
       baseOpacity: opacity,
       phase: Math.random() * Math.PI * 2,
+      isMain,
     },
   };
 }
@@ -243,7 +253,7 @@ export function createMirror(): Environment {
   const shareTexture = createScreenshareTexture();
   const mainHeight = screenHeight(MAIN.width);
 
-  const main = buildScreen(MAIN.width, new THREE.Color(0xdffbff), 0.94, shareTexture);
+  const main = buildScreen(MAIN.width, new THREE.Color(0xdffbff), 0.96, shareTexture, true);
   main.group.position.z = MAIN.z;
   group.add(main.group);
   echoes.push(main.echo);
@@ -305,6 +315,29 @@ export function createMirror(): Environment {
   );
   main.group.add(liveLight);
 
+  // ── Screenshare subscription ──────────────────────────────────────────
+  let isLiveActive = false;
+
+  const unsubscribe = screenCaptureService.subscribe((capture) => {
+    isLiveActive = capture.active && capture.texture !== null;
+    const targetTexture = isLiveActive && capture.texture ? capture.texture : shareTexture;
+    const aspectScale = isLiveActive ? capture.aspect / SCREEN_ASPECT : 1;
+
+    for (const echo of echoes) {
+      echo.content.map = targetTexture;
+      echo.content.needsUpdate = true;
+      echo.group.scale.y = aspectScale;
+      if (echo.isMain) {
+        echo.content.opacity = isLiveActive ? 1.0 : echo.baseOpacity;
+        echo.content.color.setHex(isLiveActive ? 0xffffff : 0xdffbff);
+      }
+    }
+
+    cursor.visible = !isLiveActive;
+    scan.visible = !isLiveActive;
+    liveMaterial.color.setHex(isLiveActive ? 0x10b981 : 0xff4767);
+  });
+
   // ── Dust in the projector beam ─────────────────────────────────────────
   const particleCount = 300;
   const positions = new Float32Array(particleCount * 3);
@@ -351,19 +384,30 @@ export function createMirror(): Environment {
     background: new THREE.Color(0x03050a),
     fog: new THREE.Fog(0x03050a, 620, 2150),
     update: (dt, elapsed) => {
+      if (isLiveActive) {
+        const liveTex = screenCaptureService.getState().texture;
+        if (liveTex) liveTex.needsUpdate = true;
+      }
+
       for (let i = 0; i < echoes.length; i += 1) {
         const echo = echoes[i];
-        const flicker = 0.93 + Math.sin(elapsed * (0.8 + i * 0.13) + echo.phase) * 0.055;
-        echo.content.opacity = echo.baseOpacity * flicker;
+        if (echo.isMain && isLiveActive) {
+          echo.content.opacity = 1.0;
+        } else {
+          const flicker = 0.93 + Math.sin(elapsed * (0.8 + i * 0.13) + echo.phase) * 0.055;
+          echo.content.opacity = echo.baseOpacity * flicker;
+        }
         echo.rim.opacity = 0.42 + Math.sin(elapsed * 1.4 + echo.phase) * 0.09;
       }
 
-      cursor.position.x = Math.sin(elapsed * 0.31) * MAIN.width * 0.33;
-      cursor.position.y = Math.cos(elapsed * 0.23 + 1.1) * mainHeight * 0.24;
+      if (!isLiveActive) {
+        cursor.position.x = Math.sin(elapsed * 0.31) * MAIN.width * 0.33;
+        cursor.position.y = Math.cos(elapsed * 0.23 + 1.1) * mainHeight * 0.24;
 
-      const travel = (elapsed * 0.085 + 0.2) % 1;
-      scan.position.y = mainHeight / 2 - travel * mainHeight;
-      scanMaterial.opacity = Math.sin(travel * Math.PI) * 0.1;
+        const travel = (elapsed * 0.085 + 0.2) % 1;
+        scan.position.y = mainHeight / 2 - travel * mainHeight;
+        scanMaterial.opacity = Math.sin(travel * Math.PI) * 0.1;
+      }
 
       liveMaterial.opacity = 0.7 + Math.sin(elapsed * 2.6) * 0.25;
       liveLight.scale.setScalar(1 + Math.sin(elapsed * 2.6) * 0.12);
@@ -388,6 +432,12 @@ export function createMirror(): Environment {
         }
       }
       position.needsUpdate = true;
+    },
+    dispose: () => {
+      unsubscribe();
+      shareTexture.dispose();
+      cursorTexture.dispose();
+      screenCaptureService.stop();
     },
   };
 }

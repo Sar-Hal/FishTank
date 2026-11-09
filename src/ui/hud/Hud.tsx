@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
+import { screenCaptureService, type ScreenCaptureState } from '../../engine/scenes/screenCapture';
 import { SCENES, useAppStore } from '../../state/appStore';
+import type { SceneId } from '../../state/appStore';
 import type { TrackingStatus } from '../../tracking/types';
 import { CameraPip, type PipDetection } from './CameraPip';
 import { DebugView } from './DebugView';
@@ -34,6 +37,7 @@ type IconName =
   | 'stereo'
   | 'debug'
   | 'camera'
+  | 'screenshare'
   | 'hide'
   | 'fullscreen'
   | 'settings'
@@ -74,6 +78,12 @@ function Icon({ name }: { name: IconName }) {
         <>
           <rect x="2.6" y="6.5" width="13.2" height="11" rx="2.6" {...common} />
           <path d="M15.8 10.5l4.3-2.4a.6.6 0 0 1 .9.5v6.8a.6.6 0 0 1-.9.5l-4.3-2.4" {...common} />
+        </>
+      )}
+      {name === 'screenshare' && (
+        <>
+          <rect x="2.5" y="3.5" width="19" height="13" rx="2" {...common} />
+          <path d="M8 20.5h8M12 16.5v4M12 7.5v5M9.5 9.8 12 7.5l2.5 2.3" {...common} />
         </>
       )}
       {name === 'hide' && (
@@ -127,11 +137,34 @@ export function Hud({
   const setUiHidden = useAppStore((state) => state.setUiHidden);
   const setStage = useAppStore((state) => state.setStage);
 
+  const [screenCapture, setScreenCapture] = useState<ScreenCaptureState>(() =>
+    screenCaptureService.getState(),
+  );
+
+  useEffect(() => {
+    return screenCaptureService.subscribe(setScreenCapture);
+  }, []);
+
   const meta = STATUS_META[status];
 
   const leaveTo = (stage: 'landing' | 'calibration') => {
     void exitFullscreenIfNeeded();
     setStage(stage);
+  };
+
+  const handleSelectScene = (sceneId: SceneId) => {
+    setScene(sceneId);
+    if (sceneId === 'mirror' && !screenCapture.active) {
+      void screenCaptureService.start();
+    }
+  };
+
+  const toggleScreenCapture = () => {
+    if (screenCapture.active) {
+      screenCaptureService.stop();
+    } else {
+      void screenCaptureService.start();
+    }
   };
 
   return (
@@ -143,10 +176,13 @@ export function Hud({
       <div className="hud-top">
         <div className="hud-brand glass">
           <span className="hud-brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="24" height="24">
-              <path
-                d="M4 16c5-6.5 12-6.5 17 0-5 6.5-12 6.5-17 0Z"
-                fill="rgba(34,211,238,0.18)"
+            <svg viewBox="0 0 32 32" width="22" height="22" fill="none">
+              <rect
+                x="3"
+                y="5"
+                width="26"
+                height="22"
+                rx="6"
                 stroke="currentColor"
                 strokeWidth="1.5"
                 strokeLinejoin="round"
@@ -213,6 +249,21 @@ export function Hud({
           >
             <Icon name="camera" />
           </button>
+          {scene === 'mirror' && (
+            <button
+              type="button"
+              className={`hud-button ${screenCapture.active ? 'is-active is-live' : ''}`}
+              onClick={toggleScreenCapture}
+              title={
+                screenCapture.active
+                  ? 'Stop screenshare'
+                  : 'Share screen for infinite feedback (P)'
+              }
+              aria-label="Toggle screenshare"
+            >
+              <Icon name="screenshare" />
+            </button>
+          )}
           <button
             type="button"
             className="hud-button"
@@ -283,6 +334,11 @@ export function Hud({
             <span>
               <kbd>1</kbd>–<kbd>4</kbd> scenes
             </span>
+            {scene === 'mirror' && (
+              <span>
+                <kbd>P</kbd> {screenCapture.active ? 'stop share' : 'share screen'}
+              </span>
+            )}
             <span>
               <kbd>C</kbd> recenter
             </span>
@@ -303,27 +359,67 @@ export function Hud({
             </span>
           </div>
 
-          <nav className="scene-dock glass" aria-label="Scene selector">
-            {SCENES.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`scene-button ${scene === item.id ? 'is-active' : ''}`}
-                onClick={() => setScene(item.id)}
-                aria-label={`${item.label} scene`}
-                aria-pressed={scene === item.id}
-                title={`${item.label} — ${item.hint}`}
-              >
-                <span className="scene-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-                <span className="scene-label">{item.label}</span>
-                <span className="scene-key" aria-hidden="true">
-                  {index + 1}
-                </span>
-              </button>
-            ))}
-          </nav>
+          <div className="hud-scene-container">
+            {scene === 'mirror' && (
+              <div className="hud-screenshare-bar glass">
+                {screenCapture.active ? (
+                  <>
+                    <span className="hud-screenshare-live">
+                      <span className="rec-dot" /> LIVE TUNNEL
+                    </span>
+                    <button
+                      type="button"
+                      className="hud-screenshare-btn hud-screenshare-btn--stop"
+                      onClick={() => screenCaptureService.stop()}
+                      title="Stop screensharing"
+                    >
+                      Stop Share
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="hud-screenshare-hint">
+                      Infinite Portal
+                    </span>
+                    <button
+                      type="button"
+                      className="hud-screenshare-btn hud-screenshare-btn--start"
+                      onClick={() => void screenCaptureService.start()}
+                      title="Share your screen or this window for infinite recursion"
+                    >
+                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2.5" y="3.5" width="19" height="13" rx="2" />
+                        <path d="M8 20.5h8M12 16.5v4M12 7.5v5M9.5 9.8 12 7.5l2.5 2.3" />
+                      </svg>
+                      Share Screen / Window
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <nav className="scene-dock glass" aria-label="Scene selector">
+              {SCENES.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`scene-button ${scene === item.id ? 'is-active' : ''}`}
+                  onClick={() => handleSelectScene(item.id)}
+                  aria-label={`${item.label} scene`}
+                  aria-pressed={scene === item.id}
+                  title={`${item.label} — ${item.hint}`}
+                >
+                  <span className="scene-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span className="scene-label">{item.label}</span>
+                  <span className="scene-key" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </div>
 
           <div className="hud-camera-slot">
             <CameraPip stream={stream} detectionRef={detectionRef} />

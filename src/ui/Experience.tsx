@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PortalEngine } from '../engine/PortalEngine';
+import { screenCaptureService } from '../engine/scenes/screenCapture';
 import { useAppStore } from '../state/appStore';
 import type { SceneId } from '../state/appStore';
 import { useTelemetryStore } from '../state/telemetryStore';
@@ -168,7 +169,17 @@ export function Experience() {
       const key = event.key.toLowerCase();
 
       if (key in SCENE_KEYS) {
-        state.setScene(SCENE_KEYS[key]);
+        const nextScene = SCENE_KEYS[key];
+        state.setScene(nextScene);
+        if (nextScene === 'mirror' && !screenCaptureService.getState().active) {
+          void screenCaptureService.start();
+        }
+      } else if (key === 'p' && state.scene === 'mirror') {
+        if (screenCaptureService.getState().active) {
+          screenCaptureService.stop();
+        } else {
+          void screenCaptureService.start();
+        }
       } else if (key === 'c') {
         recenter();
       } else if (key === 'h') {

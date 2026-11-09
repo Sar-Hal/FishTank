@@ -114,6 +114,7 @@ export class PortalEngine {
     this.activeSceneId = sceneId;
 
     if (this.environment) {
+      this.environment.dispose?.();
       this.scene.remove(this.environment.group);
       disposeObject(this.environment.group);
       this.environment = null;
@@ -147,6 +148,7 @@ export class PortalEngine {
     window.removeEventListener('resize', this.resize);
 
     if (this.environment) {
+      this.environment.dispose?.();
       this.scene.remove(this.environment.group);
       disposeObject(this.environment.group);
       this.environment = null;
