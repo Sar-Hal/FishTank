@@ -134,6 +134,7 @@ export class PortalEngine {
 
   setCalibration(calibration: Calibration): void {
     this.calibration = { ...calibration };
+    this.syncFeedback();
   }
 
   setStereo(stereo: boolean): void {
@@ -214,7 +215,7 @@ export class PortalEngine {
 
     const aspect =
       Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
-    feedback(this.frameTexture, aspect);
+    feedback(this.frameTexture, { aspect, heightCm: this.calibration.heightCm });
   }
 
   private frame = (now: number): void => {

@@ -9,13 +9,14 @@ describe('Infinity scene', () => {
     mirror.dispose?.();
   });
 
-  it('shapes the virtual screen like the canvas', () => {
-    const wide = screenSize(16 / 9);
+  it('sizes the virtual screen from the real screen, not the viewing distance', () => {
+    const wide = screenSize({ aspect: 16 / 9, heightCm: 20 });
     expect(wide.width / wide.height).toBeCloseTo(16 / 9, 5);
+    expect(wide.height).toBeCloseTo(17, 5);
 
-    const tall = screenSize(9 / 16);
+    const tall = screenSize({ aspect: 9 / 16, heightCm: 30 });
     expect(tall.width / tall.height).toBeCloseTo(9 / 16, 5);
-    expect(tall.height).toBeLessThanOrEqual(150);
+    expect(tall.height).toBeLessThan(30);
   });
 
   it('rebuilds the screen when the canvas aspect changes', () => {
@@ -23,7 +24,7 @@ describe('Infinity scene', () => {
     const texture = new THREE.Texture();
     const before = mirror.group.children.length;
 
-    mirror.feedback?.(texture, 4 / 3);
+    mirror.feedback?.(texture, { aspect: 4 / 3, heightCm: 25 });
     expect(mirror.group.children.length).toBe(before);
 
     let found = false;

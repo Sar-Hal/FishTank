@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Environment } from './types';
+import type { Environment, FeedbackView } from './types';
 
 /**
  * "Infinity" — the screen, inside the screen, inside the screen…
@@ -18,9 +18,13 @@ const FLOOR_Y = -ROOM.height / 2;
 const CEILING_Y = ROOM.height / 2;
 const BACK_Z = -ROOM.depth;
 
-const SCREEN_Z = -240;
-const SCREEN_WIDTH = 160;
-const MAX_SCREEN_HEIGHT = 150;
+/**
+ * The virtual screen sits just behind the glass and is sized from the real
+ * screen, so each nested copy is a fixed fraction of the one before it no
+ * matter how far away you sit. Bigger fill / smaller gap = tighter tunnel.
+ */
+const SCREEN_GAP_CM = 6;
+const SCREEN_FILL = 0.85;
 /** Brightness kept per nesting level. Lower = shorter tunnel. */
 const FEEDBACK_GAIN = 0.9;
 
@@ -53,29 +57,28 @@ interface ScreenParts {
   frame: THREE.Material;
 }
 
-/** Screen width and height for a given canvas aspect, kept to a sensible size. */
-export function screenSize(aspect: number): { width: number; height: number } {
-  const safeAspect = aspect > 0 && Number.isFinite(aspect) ? aspect : 16 / 9;
-  let width = SCREEN_WIDTH;
-  let height = width / safeAspect;
-  if (height > MAX_SCREEN_HEIGHT) {
-    height = MAX_SCREEN_HEIGHT;
-    width = height * safeAspect;
-  }
-  return { width, height };
+/**
+ * Virtual screen size in cm: a fixed fraction of the real screen, shaped like
+ * the canvas (the projection derives the visible width from the same aspect).
+ */
+export function screenSize(view: FeedbackView): { width: number; height: number } {
+  const aspect = view.aspect > 0 && Number.isFinite(view.aspect) ? view.aspect : 16 / 9;
+  const heightCm = view.heightCm > 0 && Number.isFinite(view.heightCm) ? view.heightCm : 19.4;
+  const height = heightCm * SCREEN_FILL;
+  return { width: height * aspect, height };
 }
 
-function buildScreen(aspect: number, content: THREE.ShaderMaterial): ScreenParts {
+function buildScreen(view: FeedbackView, content: THREE.ShaderMaterial): ScreenParts {
   const group = new THREE.Group();
-  const { width, height } = screenSize(aspect);
-  const bezel = Math.max(1.2, width * 0.02);
+  const { width, height } = screenSize(view);
+  const bezel = Math.max(0.3, width * 0.012);
   const depth = bezel * 1.5;
   const geometries: THREE.BufferGeometry[] = [];
 
   const contentGeometry = new THREE.PlaneGeometry(width, height);
   geometries.push(contentGeometry);
   const contentMesh = new THREE.Mesh(contentGeometry, content);
-  contentMesh.position.z = 0.7;
+  contentMesh.position.z = 0;
   group.add(contentMesh);
 
   const frame = new THREE.MeshStandardMaterial({
@@ -108,7 +111,7 @@ function buildScreen(aspect: number, content: THREE.ShaderMaterial): ScreenParts
     fog: false,
     toneMapped: false,
   });
-  const thickness = Math.max(0.8, width * 0.008);
+  const thickness = Math.max(0.15, width * 0.005);
   const rimX = new THREE.BoxGeometry(width, thickness, 0.5);
   const rimY = new THREE.BoxGeometry(thickness, height, 0.5);
   geometries.push(rimX, rimY);
@@ -122,7 +125,7 @@ function buildScreen(aspect: number, content: THREE.ShaderMaterial): ScreenParts
     group.add(edge);
   }
 
-  group.position.z = SCREEN_Z;
+  group.position.z = -SCREEN_GAP_CM;
   return { group, rim, geometries, frame };
 }
 
@@ -200,20 +203,23 @@ export function createMirror(): Environment {
     fragmentShader: FEEDBACK_FRAGMENT,
   });
 
-  let screenAspect = 16 / 9;
-  let screen = buildScreen(screenAspect, content);
+  let screenView: FeedbackView = { aspect: 16 / 9, heightCm: 19.4 };
+  let screen = buildScreen(screenView, content);
   group.add(screen.group);
 
-  const feedback = (texture: THREE.Texture, aspect: number) => {
+  const feedback = (texture: THREE.Texture, view: FeedbackView) => {
     content.uniforms.map.value = texture;
     content.uniforms.hasMap.value = 1;
 
-    // Match the screen's shape to the canvas so each nested copy isn't stretched.
-    if (Math.abs(aspect - screenAspect) > 0.005) {
-      screenAspect = aspect;
+    // Match the canvas shape and real screen size so nested copies aren't stretched.
+    if (
+      Math.abs(view.aspect - screenView.aspect) > 0.005 ||
+      Math.abs(view.heightCm - screenView.heightCm) > 0.05
+    ) {
+      screenView = { ...view };
       group.remove(screen.group);
       disposeScreen(screen);
-      screen = buildScreen(screenAspect, content);
+      screen = buildScreen(screenView, content);
       group.add(screen.group);
     }
   };
