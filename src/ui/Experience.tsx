@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PortalEngine } from '../engine/PortalEngine';
-import { screenCaptureService } from '../engine/scenes/screenCapture';
 import { useAppStore } from '../state/appStore';
 import type { SceneId } from '../state/appStore';
 import { useTelemetryStore } from '../state/telemetryStore';
@@ -169,27 +168,21 @@ export function Experience() {
       const key = event.key.toLowerCase();
 
       if (key in SCENE_KEYS) {
-        const nextScene = SCENE_KEYS[key];
-        state.setScene(nextScene);
-        if (nextScene === 'mirror' && !screenCaptureService.getState().active) {
-          void screenCaptureService.start();
-        }
-      } else if (key === 'p' && state.scene === 'mirror') {
-        if (screenCaptureService.getState().active) {
-          screenCaptureService.stop();
-        } else {
-          void screenCaptureService.start();
-        }
+        state.setScene(SCENE_KEYS[key]);
       } else if (key === 'c') {
         recenter();
       } else if (key === 'h') {
         state.toggleUiHidden();
+      } else if (key === 'escape' && state.settingsOpen) {
+        state.setSettingsOpen(false);
       } else if (key === 'escape' && state.uiHidden) {
         state.setUiHidden(false);
+      } else if (key === 'o') {
+        state.setSettingsOpen(!state.settingsOpen);
       } else if (key === 's') {
         state.setStereo(!state.stereo);
       } else if (key === 'd') {
-        state.setDebug(!state.debug);
+        state.setStats(!state.stats);
       } else if (key === 'f') {
         void toggleFullscreen();
       } else if (key === 'm') {
@@ -206,13 +199,17 @@ export function Experience() {
   }, [recenter]);
 
   return (
-    <div
-      className="experience"
-      onPointerDown={() => {
-        if (useAppStore.getState().uiHidden) useAppStore.getState().setUiHidden(false);
-      }}
-    >
-      <div ref={hostRef} className="engine-host" />
+    <div className="experience">
+      <div
+        ref={hostRef}
+        className="engine-host"
+        onPointerDown={() => {
+          // Tapping the scene brings hidden controls back, or closes settings.
+          const state = useAppStore.getState();
+          if (state.uiHidden) state.setUiHidden(false);
+          else if (state.settingsOpen) state.setSettingsOpen(false);
+        }}
+      />
       <Hud
         hidden={uiHidden}
         status={tracking.status}
@@ -225,7 +222,7 @@ export function Experience() {
       />
       {uiHidden && (
         <div className="immersive-hint" role="status">
-          Press <kbd>H</kbd> or <kbd>Esc</kbd> — or tap — to show controls
+          Tap anywhere or press <kbd>H</kbd> to bring the controls back
         </div>
       )}
     </div>

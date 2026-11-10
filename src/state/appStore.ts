@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type Stage = 'landing' | 'calibration' | 'experience';
+export type Stage = 'landing' | 'experience';
 export type SceneId = 'aquarium' | 'corridor' | 'cyber' | 'mirror';
 
 export interface Calibration {
@@ -14,10 +14,14 @@ export interface Calibration {
   sensitivity: number;
 }
 
+/**
+ * Most people sit 40–50 cm from a laptop. Using that as the starting distance
+ * gives a wider field of view, so the scene doesn't feel zoomed in on launch.
+ */
 export const DEFAULT_CALIBRATION: Calibration = {
-  widthCm: 53,
-  heightCm: 30,
-  distanceCm: 60,
+  widthCm: 34.5,
+  heightCm: 19.4,
+  distanceCm: 45,
   sensitivity: 1,
 };
 
@@ -27,10 +31,10 @@ export const SCENES: ReadonlyArray<{
   icon: string;
   hint: string;
 }> = [
-  { id: 'aquarium', label: 'Aquarium', icon: '🐠', hint: 'A living coral reef' },
-  { id: 'corridor', label: 'Corridor', icon: '🏛️', hint: 'A study in warm light' },
-  { id: 'cyber', label: 'Cyber', icon: '⚡', hint: 'A neon reactor chamber' },
-  { id: 'mirror', label: 'Infinity', icon: '🪞', hint: 'A screenshare inside a screenshare' },
+  { id: 'aquarium', label: 'Aquarium', icon: '🐠', hint: 'Fish swimming behind your screen' },
+  { id: 'corridor', label: 'Corridor', icon: '🏛️', hint: 'A long, warmly lit hallway' },
+  { id: 'cyber', label: 'Cyber', icon: '⚡', hint: 'A glowing sci-fi room' },
+  { id: 'mirror', label: 'Infinity', icon: '🪞', hint: 'Your screen, inside your screen, forever' },
 ];
 
 interface AppState {
@@ -38,21 +42,26 @@ interface AppState {
   calibration: Calibration;
   scene: SceneId;
   stereo: boolean;
-  debug: boolean;
+  /** Shows the head-position numbers and frustum diagram. */
+  stats: boolean;
   pipCollapsed: boolean;
+  settingsOpen: boolean;
   /** Hides every HUD element so only the scene remains. */
   uiHidden: boolean;
   setStage: (stage: Stage) => void;
   setCalibration: (value: Partial<Calibration>) => void;
   setScene: (scene: SceneId) => void;
   setStereo: (stereo: boolean) => void;
-  setDebug: (debug: boolean) => void;
+  setStats: (stats: boolean) => void;
   setPipCollapsed: (collapsed: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
   setUiHidden: (hidden: boolean) => void;
   toggleUiHidden: () => void;
 }
 
-const STORAGE_KEY = 'fishtank:settings:v1';
+// v2: the default sitting distance changed from 60 cm to 45 cm, so older saved
+// settings are ignored rather than keeping the zoomed-in view.
+const STORAGE_KEY = 'fishtank:settings:v2';
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -81,7 +90,7 @@ function loadSettings(): Partial<PersistedSettings> {
         ? {
             widthCm: clamp(saved.widthCm, 10, 300),
             heightCm: clamp(saved.heightCm, 6, 200),
-            distanceCm: clamp(saved.distanceCm, 20, 200),
+            distanceCm: clamp(saved.distanceCm, 25, 150),
             sensitivity: clamp(saved.sensitivity, 0.3, 3),
           }
         : undefined;
@@ -106,16 +115,26 @@ function persistSettings(calibration: Calibration, scene: SceneId) {
 
 const saved = loadSettings();
 
+/** False on a first visit, when the screen size should be guessed instead. */
+export function hasSavedCalibration(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export const useAppStore = create<AppState>((set) => ({
   stage: 'landing',
   calibration: saved.calibration ?? DEFAULT_CALIBRATION,
   scene: saved.scene ?? 'aquarium',
   stereo: false,
-  debug: false,
+  stats: false,
   pipCollapsed: false,
+  settingsOpen: false,
   uiHidden: false,
 
-  setStage: (stage) => set({ stage }),
+  setStage: (stage) => set({ stage, settingsOpen: false, uiHidden: false }),
 
   setCalibration: (value) =>
     set((state) => {
@@ -131,8 +150,10 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   setStereo: (stereo) => set({ stereo }),
-  setDebug: (debug) => set({ debug }),
+  setStats: (stats) => set({ stats }),
   setPipCollapsed: (pipCollapsed) => set({ pipCollapsed }),
-  setUiHidden: (uiHidden) => set({ uiHidden }),
-  toggleUiHidden: () => set((state) => ({ uiHidden: !state.uiHidden })),
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setUiHidden: (uiHidden) => set({ uiHidden, ...(uiHidden ? { settingsOpen: false } : {}) }),
+  toggleUiHidden: () =>
+    set((state) => ({ uiHidden: !state.uiHidden, settingsOpen: false })),
 }));

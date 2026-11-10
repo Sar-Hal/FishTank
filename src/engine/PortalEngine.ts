@@ -53,6 +53,10 @@ export class PortalEngine {
   private stereo = false;
   private disposed = false;
 
+  /** Copy of the last rendered frame, for scenes that show the screen inside itself. */
+  private frameTexture: THREE.FramebufferTexture | null = null;
+  private readonly drawingBufferSize = new THREE.Vector2();
+
   private rafId = 0;
   private lastFrameTime = 0;
   private fpsFrames = 0;
@@ -125,6 +129,7 @@ export class PortalEngine {
     this.scene.add(environment.group);
     this.scene.background = environment.background;
     this.scene.fog = environment.fog;
+    this.syncFeedback();
   }
 
   setCalibration(calibration: Calibration): void {
@@ -154,6 +159,8 @@ export class PortalEngine {
       this.environment = null;
     }
 
+    this.frameTexture?.dispose();
+    this.frameTexture = null;
     this.scene.environment = null;
     this.environmentMap.dispose();
     this.scene.clear();
@@ -175,7 +182,40 @@ export class PortalEngine {
     // crisp instead of rendering at a stale resolution.
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height, true);
+    this.syncFeedback();
   };
+
+  /**
+   * Keep the frame-copy texture the same size as the canvas and hand it to
+   * scenes that want it. Scenes without a feedback hook cost nothing.
+   */
+  private syncFeedback(): void {
+    const feedback = this.environment?.feedback;
+    if (!feedback) {
+      this.frameTexture?.dispose();
+      this.frameTexture = null;
+      return;
+    }
+
+    this.renderer.getDrawingBufferSize(this.drawingBufferSize);
+    const width = Math.max(1, Math.floor(this.drawingBufferSize.x));
+    const height = Math.max(1, Math.floor(this.drawingBufferSize.y));
+
+    if (
+      !this.frameTexture ||
+      this.frameTexture.image.width !== width ||
+      this.frameTexture.image.height !== height
+    ) {
+      this.frameTexture?.dispose();
+      this.frameTexture = new THREE.FramebufferTexture(width, height);
+      this.frameTexture.minFilter = THREE.LinearFilter;
+      this.frameTexture.magFilter = THREE.LinearFilter;
+    }
+
+    const aspect =
+      Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
+    feedback(this.frameTexture, aspect);
+  }
 
   private frame = (now: number): void => {
     if (this.disposed) return;
@@ -187,6 +227,11 @@ export class PortalEngine {
 
     this.environment?.update(dt, elapsed);
     this.renderFrame();
+
+    // Grab what was just drawn so next frame can show it on the in-scene screen.
+    if (this.frameTexture && this.environment?.feedback) {
+      this.renderer.copyFramebufferToTexture(this.frameTexture);
+    }
 
     this.fpsFrames += 1;
     const fpsElapsed = now - this.fpsWindowStart;

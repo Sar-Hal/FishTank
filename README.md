@@ -10,9 +10,9 @@ Built with React 19, Three.js and MediaPipe's on-device face detector. The proje
 
 - **On-device head tracking** — BlazeFace short-range via MediaPipe. No video leaves the machine.
 - **Off-axis projection** — move your head and genuinely see around objects, through the window edges, and into the scene.
-- **Four environments** — a living aquarium with animated fish and bubbles, a warm study corridor, a neon reactor chamber, and an infinite screenshare tunnel.
+- **Four environments** — a living aquarium with animated fish and bubbles, a warm study corridor, a neon reactor chamber, and Infinity: a screen that shows itself forever (no screen-share permission needed — the engine feeds each finished frame back into the scene).
 - **Red / cyan stereo** — optional dual-pass anaglyph rendering using a 6.3 cm inter-pupillary distance.
-- **Physical calibration** — monitor presets, a bank-card ruler, sitting distance and motion sensitivity. Settings persist locally.
+- **Settings drawer** — screen size (auto-guessed), sitting distance, movement strength and a bank-card ruler, all adjusted live over the scene. Settings persist locally.
 - **Debug frustum view** — an isometric diagram of the screen, eye position and viewing frustum.
 - **Camera HUD** — live preview with a mirrored face reticle, collapsible independently of tracking.
 - **Keyboard control** — everything reachable without leaving the scene.
@@ -46,20 +46,21 @@ npm test
 | `1` / `2` / `3` / `4` | Aquarium / Corridor / Cyber / Infinity scene |
 | `C` | Recenter the view on the current head position |
 | `S` | Toggle red / cyan stereo |
-| `D` | Toggle the isometric frustum debug view |
+| `O` | Open or close settings |
+| `D` | Toggle nerd stats (head position and frustum diagram) |
 | `F` | Toggle fullscreen |
 | `M` | Collapse or expand the camera preview |
 | `H` | Hide every HUD element, leaving only the scene |
-| `Esc` | Restore the HUD when it is hidden |
+| `Esc` | Close settings, or restore the HUD when it is hidden |
 | Mouse | Use the HUD for scenes, recentering, settings and exit |
 
 The **hide UI** button (crossed-out eye) leaves the scene untouched and fades the whole HUD away. Press `H` or `Esc` to bring it back, or click/tap the scene. A short hint appears for a few seconds when the HUD first disappears.
 
 The **recenter** button is useful if you shift your chair: it establishes the current head position as the neutral viewpoint. If no face is visible it resets to automatic baselining.
 
-## Display setup
+## Screen setup
 
-For the strongest illusion, set your real monitor size and eye-to-screen distance in **Display setup**. The defaults are a 24-inch monitor at 60 cm; a laptop preset or the bank-card ruler will usually be more accurate.
+For the strongest illusion, open **Settings** and set your real screen size and eye-to-screen distance. On first visit the screen size is guessed from its resolution and the distance defaults to 45 cm (typical for a laptop). A closer distance gives a wider view; the bank-card ruler gives the most accurate screen size.
 
 The projection derives the horizontal view extent from the canvas aspect ratio, so the window stays geometrically correct when the browser is resized or zoomed. Physical size guesses use CSS pixels × device pixel ratio, which cancels out browser zoom.
 
@@ -72,7 +73,7 @@ src/
   state/       Zustand app settings + throttled telemetry
   tracking/    MediaPipe camera service and physical head-pose tracker
   engine/      Renderer lifecycle, off-axis camera and scene factories
-  ui/          Landing, calibration, experience and HUD components
+  ui/          Landing page, experience, settings drawer and HUD components
 ```
 
 The engine lives outside React's render cycle. `Experience` creates one `PortalEngine` and one `FaceTrackingService` per mount, pushes scene/stereo/calibration changes through setters, and sends head samples straight to the engine. React only re-renders for UI state; the 10 Hz telemetry store feeds the HUD.

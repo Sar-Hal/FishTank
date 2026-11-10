@@ -1,75 +1,86 @@
-import { DEFAULT_CALIBRATION, useAppStore } from '../state/appStore';
+import { hasSavedCalibration, SCENES, useAppStore } from '../state/appStore';
+import type { SceneId } from '../state/appStore';
 import { DISPLAY_PRESETS, guessPresetIndex } from './displayPresets';
+
+const STEPS = [
+  { icon: '📷', title: 'Allow your camera', text: 'It only looks for your face. Nothing is recorded or uploaded.' },
+  { icon: '🪑', title: 'Sit back a little', text: 'About 45 cm away, roughly the length of your forearm and hand.' },
+  { icon: '👀', title: 'Move your head', text: 'Lean left, right, up and down to peek around inside the screen.' },
+];
 
 export function Landing() {
   const setStage = useAppStore((state) => state.setStage);
+  const setScene = useAppStore((state) => state.setScene);
   const setCalibration = useAppStore((state) => state.setCalibration);
-  const calibration = useAppStore((state) => state.calibration);
+  const scene = useAppStore((state) => state.scene);
 
-  const detected = DISPLAY_PRESETS[guessPresetIndex()];
-
-  const start = () => {
-    const atDefaults =
-      calibration.widthCm === DEFAULT_CALIBRATION.widthCm &&
-      calibration.heightCm === DEFAULT_CALIBRATION.heightCm;
-    if (atDefaults && detected.widthCm > 0) {
-      setCalibration({ widthCm: detected.widthCm, heightCm: detected.heightCm });
+  const start = (sceneId: SceneId = scene) => {
+    // First visit: guess the screen size so things look right without setup.
+    if (!hasSavedCalibration()) {
+      const detected = DISPLAY_PRESETS[guessPresetIndex()];
+      if (detected.widthCm > 0) {
+        setCalibration({ widthCm: detected.widthCm, heightCm: detected.heightCm });
+      }
     }
+    setScene(sceneId);
     setStage('experience');
   };
 
   return (
-    <main className="page page--landing">
-      <div className="landing-glow" aria-hidden="true" />
+    <main className="landing">
+      <div className="landing-bubbles" aria-hidden="true">
+        {Array.from({ length: 14 }, (_, i) => (
+          <span key={i} style={{ ['--i' as string]: i }} />
+        ))}
+      </div>
+
       <div className="landing-inner">
-        <span className="eyebrow">
-          <span className="pulse-dot" />
-          Real-time spatial window
-        </span>
-
+        <div className="landing-fish" aria-hidden="true">
+          🐠
+        </div>
         <h1 className="landing-title">
-          FISH<span>TANK</span>
+          Fish <span>Tank</span>
         </h1>
+        <p className="landing-lead">Turn your screen into a window you can peek through.</p>
 
-        <p className="landing-lead">Your monitor, turned inside out.</p>
+        <button className="btn btn--primary btn--big" onClick={() => start()}>
+          Let&apos;s go <span aria-hidden="true">→</span>
+        </button>
 
-        <p className="landing-copy">
-          Move your head and the screen becomes a window. Powered by on-device face
-          tracking and Kooima off-axis projection — no headset, no install, no data
-          leaving your machine.
-        </p>
+        <ol className="steps">
+          {STEPS.map((step, index) => (
+            <li key={step.title} className="step">
+              <span className="step-icon" aria-hidden="true">
+                {step.icon}
+              </span>
+              <span className="step-number">{index + 1}</span>
+              <strong>{step.title}</strong>
+              <p>{step.text}</p>
+            </li>
+          ))}
+        </ol>
 
-        <div className="feature-row">
-          <span className="feature-chip">⚡ 60 fps face tracking</span>
-          <span className="feature-chip">🔒 100% on-device</span>
-          <span className="feature-chip">🥽 Red / cyan stereo</span>
-          <span className="feature-chip">📐 Dynamic frustum</span>
+        <div className="landing-scenes">
+          <span className="landing-scenes-label">Or jump straight into</span>
+          <div className="landing-scene-row">
+            {SCENES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="landing-scene"
+                onClick={() => start(item.id)}
+                title={item.hint}
+              >
+                <span aria-hidden="true">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-
-        <div className="landing-actions">
-          <button className="btn btn--primary" onClick={start}>
-            Enter the portal <span aria-hidden="true">→</span>
-          </button>
-          <button className="btn btn--ghost" onClick={() => setStage('calibration')}>
-            Display setup
-          </button>
-        </div>
-
-        <p className="detected-line">
-          Detected display: <strong>{detected.label}</strong>
-          {detected.widthCm > 0 && (
-            <span>
-              {' '}
-              · {detected.widthCm} × {detected.heightCm} cm
-            </span>
-          )}
-        </p>
       </div>
 
       <footer className="landing-footer">
-        <span>Best viewed in Chrome or Edge</span>
-        <span className="landing-footer-dot" />
-        <span>Webcam required</span>
+        Works best in Chrome or Edge, with a webcam. 🔒 Everything stays on your device.
       </footer>
     </main>
   );

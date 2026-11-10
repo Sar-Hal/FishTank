@@ -70,7 +70,7 @@ export class FaceTrackingService {
     } catch (error) {
       console.error('Camera access failed:', error);
       if (this.stopped) return;
-      const message = 'Camera permission was denied. The view will stay centred.';
+      const message = "Fish Tank can't use your camera, so the view won't follow your head. Allow the camera in your browser's address bar, then reload.";
       this.callbacks.onStatus('camera-error', 'Camera unavailable');
       this.callbacks.onError?.(message);
       this.callbacks.onSample(null);
@@ -98,7 +98,7 @@ export class FaceTrackingService {
     } catch (error) {
       console.error('Face tracking model failed to load:', error);
       if (this.stopped) return;
-      const message = 'The face-tracking model failed to load. Running in centred view.';
+      const message = "Head tracking couldn't start, so the view will stay still. Try reloading the page.";
       this.callbacks.onStatus('model-error', 'Tracking unavailable');
       this.callbacks.onError?.(message);
       this.callbacks.onSample(null);
