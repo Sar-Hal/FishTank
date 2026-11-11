@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { detectDevice } from '../ui/displayPresets';
 
 export type Stage = 'landing' | 'experience';
 export type SceneId = 'aquarium' | 'corridor' | 'cyber' | 'mirror';
@@ -24,6 +25,25 @@ export const DEFAULT_CALIBRATION: Calibration = {
   distanceCm: 45,
   sensitivity: 1,
 };
+
+/**
+ * Screen sizes are stored long side × short side. Phones and tablets get
+ * turned, so match them to the canvas: in portrait the long side is the
+ * height. Everything that uses physical size goes through this.
+ */
+export function orientCalibration<T extends { widthCm: number; heightCm: number }>(
+  calibration: T,
+  aspect: number,
+): T {
+  const long = Math.max(calibration.widthCm, calibration.heightCm);
+  const short = Math.min(calibration.widthCm, calibration.heightCm);
+  const portrait = aspect > 0 && aspect < 1;
+  return {
+    ...calibration,
+    widthCm: portrait ? short : long,
+    heightCm: portrait ? long : short,
+  };
+}
 
 export const SCENES: ReadonlyArray<{
   id: SceneId;
@@ -134,7 +154,8 @@ export const useAppStore = create<AppState>((set) => ({
   stereo: false,
   trackingEnabled: true,
   stats: false,
-  pipCollapsed: false,
+  // Small screens start with the camera preview folded away to save room.
+  pipCollapsed: detectDevice() === 'phone',
   settingsOpen: false,
   uiHidden: false,
 

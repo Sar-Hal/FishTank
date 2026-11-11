@@ -7,6 +7,13 @@ describe('windowScale', () => {
     expect(windowScale({ bottom: -100, top: 100 }, 20)).toBeCloseTo(0.1, 6);
   });
 
+  it('fills more of a tall portrait screen without changing landscape', () => {
+    // Landscape 30 × 17 cm: height limits, exactly as before.
+    expect(windowScale({ bottom: 0, top: 100 }, 17, 30)).toBeCloseTo(0.17, 6);
+    // Portrait 7 × 15 cm: width limits, allowing a 1.4× overfill.
+    expect(windowScale({ bottom: 0, top: 100 }, 15, 7)).toBeCloseTo(0.098, 6);
+  });
+
   it('leaves the scene alone for an invalid slice or screen', () => {
     expect(windowScale({ bottom: 10, top: 10 }, 20)).toBe(1);
     expect(windowScale({ bottom: 0, top: 100 }, 0)).toBe(1);

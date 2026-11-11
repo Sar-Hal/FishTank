@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { Calibration, SceneId } from '../state/appStore';
+import { orientCalibration, type Calibration, type SceneId } from '../state/appStore';
 import type { HeadPose } from '../tracking/types';
 import { applyOffAxisProjection, EYE_SEPARATION_CM } from './OffAxisCamera';
 import { createAquarium } from './scenes/aquarium';
@@ -14,11 +14,19 @@ export interface PortalEngineOptions {
   onFps?: (fps: number) => void;
 }
 
-/** Scale that makes `window` fill a screen `heightCm` tall. */
-export function windowScale(window: SceneWindow, heightCm: number): number {
+const PORTRAIT_OVERFILL = 1.4;
+
+/**
+ * Scale that makes `window` fill a screen `heightCm` tall. On a tall, narrow
+ * (portrait) screen it is limited by the width instead, so the scene isn't
+ * squeezed into a thin vertical strip; the floor still sits on the bottom edge.
+ */
+export function windowScale(window: SceneWindow, heightCm: number, widthCm = Infinity): number {
   const span = window.top - window.bottom;
   if (!(span > 0) || !(heightCm > 0)) return 1;
-  return heightCm / span;
+  // Allow the slice to be up to 1.4× wider than the screen: scenes are wide,
+  // so trimming their sides lets them fill more of a tall screen.
+  return Math.min(heightCm, widthCm * PORTRAIT_OVERFILL) / span;
 }
 
 const createEnvironment = (sceneId: SceneId): Environment => {
@@ -154,11 +162,13 @@ export class PortalEngine {
     const environment = this.environment;
     if (!environment) return;
 
+    const screen = orientCalibration(this.calibration, this.aspect());
     const window = environment.window;
-    const scale = window ? windowScale(window, this.calibration.heightCm) : 1;
+    const scale = window ? windowScale(window, screen.heightCm, screen.widthCm) : 1;
     const group = environment.group;
     group.scale.setScalar(scale);
-    group.position.y = window ? -((window.top + window.bottom) / 2) * scale : 0;
+    // Pin the window's bottom (the floor) to the screen's bottom edge.
+    group.position.y = window ? -screen.heightCm / 2 - window.bottom * scale : 0;
 
     group.traverse((object) => {
       if (object instanceof THREE.PointLight || object instanceof THREE.SpotLight) {
@@ -172,7 +182,12 @@ export class PortalEngine {
     });
 
     const fog = environment.fog;
-    this.scene.fog = fog ? new THREE.Fog(fog.color, fog.near * scale, fog.far * scale) : null;
+    // Fog is measured from the eye, but scenes are designed with distances from
+    // the glass, so add the viewing distance back on after scaling.
+    const eye = scale === 1 ? 0 : this.calibration.distanceCm;
+    this.scene.fog = fog
+      ? new THREE.Fog(fog.color, eye + fog.near * scale, eye + fog.far * scale)
+      : null;
   }
 
   setStereo(stereo: boolean): void {
@@ -215,12 +230,17 @@ export class PortalEngine {
 
     const width = Math.max(1, this.container.clientWidth);
     const height = Math.max(1, this.container.clientHeight);
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    // Phones have very dense screens; 1.5× looks the same there and keeps the
+    // frame rate (and battery) healthy.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2);
 
     // Re-apply the pixel ratio so browser zoom / monitor scaling changes stay
     // crisp instead of rendering at a stale resolution.
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setSize(width, height, true);
+    // Rotating a phone swaps the screen's width and height.
+    this.fitEnvironment();
     this.syncFeedback();
   };
 
@@ -253,7 +273,14 @@ export class PortalEngine {
 
     const aspect =
       Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
-    feedback(this.frameTexture, { aspect, heightCm: this.calibration.heightCm });
+    feedback(this.frameTexture, {
+      aspect,
+      heightCm: orientCalibration(this.calibration, aspect).heightCm,
+    });
+  }
+
+  private aspect(): number {
+    return Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
   }
 
   private frame = (now: number): void => {
@@ -285,10 +312,11 @@ export class PortalEngine {
     const width = Math.max(1, this.container.clientWidth);
     const height = Math.max(1, this.container.clientHeight);
     const aspect = width / height;
+    const screen = orientCalibration(this.calibration, aspect);
 
     if (!this.stereo) {
       this.renderer.autoClear = true;
-      applyOffAxisProjection(this.camera, this.pose, this.calibration, aspect);
+      applyOffAxisProjection(this.camera, this.pose, screen, aspect);
       this.renderer.render(this.scene, this.camera);
       return;
     }
@@ -307,7 +335,7 @@ export class PortalEngine {
       applyOffAxisProjection(
         this.camera,
         this.pose,
-        this.calibration,
+        screen,
         aspect,
         -EYE_SEPARATION_CM / 2,
       );
@@ -318,7 +346,7 @@ export class PortalEngine {
       applyOffAxisProjection(
         this.camera,
         this.pose,
-        this.calibration,
+        screen,
         aspect,
         EYE_SEPARATION_CM / 2,
       );

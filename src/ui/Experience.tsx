@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PortalEngine } from '../engine/PortalEngine';
-import { useAppStore } from '../state/appStore';
+import { orientCalibration, useAppStore } from '../state/appStore';
 import type { SceneId } from '../state/appStore';
 import { useTelemetryStore } from '../state/telemetryStore';
 import { FaceTrackingService } from '../tracking/FaceTrackingService';
@@ -19,6 +19,13 @@ const INITIAL_STATUS: TrackingState = {
   status: 'starting',
   message: 'Preparing the camera…',
 };
+
+/** Calibration with width/height matched to how the device is currently held. */
+const currentScreen = () =>
+  orientCalibration(
+    useAppStore.getState().calibration,
+    window.innerWidth / Math.max(1, window.innerHeight),
+  );
 
 const SCENE_KEYS: Record<string, SceneId> = {
   '1': 'aquarium',
@@ -74,7 +81,7 @@ export function Experience() {
     const service = new FaceTrackingService({
       onSample: (sample) => {
         const now = sample?.timestamp ?? performance.now();
-        const pose = tracker.update(sample, useAppStore.getState().calibration, now);
+        const pose = tracker.update(sample, currentScreen(), now);
         engine.setHeadPose(pose);
 
         if (now - lastTelemetryAt >= 100) {
@@ -152,7 +159,7 @@ export function Experience() {
     tracker.calibrate(hasFace ? undefined : null);
     const pose = tracker.update(
       hasFace ? tracker.lastFaceSample : null,
-      useAppStore.getState().calibration,
+      currentScreen(),
       performance.now(),
     );
     engineRef.current?.setHeadPose(pose);

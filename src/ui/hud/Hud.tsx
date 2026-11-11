@@ -19,6 +19,9 @@ interface HudProps {
   onDismissError: () => void;
 }
 
+const canFullscreen =
+  typeof document !== 'undefined' && Boolean(document.fullscreenEnabled);
+
 type Tone = 'live' | 'busy' | 'error' | 'idle';
 
 function describeStatus(status: TrackingStatus, faceVisible: boolean): { label: string; tone: Tone } {
@@ -154,7 +157,10 @@ export function Hud({
 
   const buttons: Array<{ icon: IconName; label: string; key: string; onClick: () => void; active?: boolean }> = [
     { icon: 'recenter', label: 'Re-centre', key: 'C', onClick: onRecenter },
-    { icon: 'fullscreen', label: 'Full screen', key: 'F', onClick: () => void toggleFullscreen() },
+    // iPhones don't let web pages go full screen, so don't offer a dead button.
+    ...(canFullscreen
+      ? [{ icon: 'fullscreen' as const, label: 'Full screen', key: 'F', onClick: () => void toggleFullscreen() }]
+      : []),
     { icon: 'hide', label: 'Hide', key: 'H', onClick: () => setUiHidden(true) },
     {
       icon: 'settings',
@@ -183,7 +189,7 @@ export function Hud({
             aria-live="polite"
           >
             <span className="status-dot" />
-            {meta.label}
+            <span className="status-text">{meta.label}</span>
           </span>
         </div>
 

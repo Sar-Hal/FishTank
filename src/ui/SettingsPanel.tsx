@@ -4,7 +4,9 @@ import {
   CUSTOM_PRESET_INDEX,
   DISPLAY_PRESETS,
   findPresetIndex,
+  detectDevice,
   guessPresetIndex,
+  typicalDistanceCm,
 } from './displayPresets';
 
 const CARD_WIDTH_CM = 8.56;
@@ -74,6 +76,9 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
     ? CUSTOM_PRESET_INDEX
     : findPresetIndex(calibration.widthCm, calibration.heightCm);
   const detectedIndex = guessPresetIndex();
+  const device = detectDevice();
+  // Touch devices have no keyboard, and a bank card is wider than a phone.
+  const isTouch = device !== 'computer';
   const [cardPx, setCardPx] = useState(300);
   const [cardLocked, setCardLocked] = useState(false);
 
@@ -106,6 +111,7 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
     const detected = DISPLAY_PRESETS[detectedIndex];
     setCalibration({
       ...DEFAULT_CALIBRATION,
+      distanceCm: typicalDistanceCm(),
       ...(detected.widthCm > 0
         ? { widthCm: detected.widthCm, heightCm: detected.heightCm }
         : {}),
@@ -230,6 +236,7 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
             </div>
           )}
 
+          {device !== 'phone' && (
           <details className="ruler">
             <summary>Not sure? Measure it with a bank card</summary>
             <p>
@@ -262,6 +269,7 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
               {cardLocked ? '✓ Screen size saved' : 'It matches — save'}
             </button>
           </details>
+          )}
         </section>
 
         <section className="setting setting--toggles">
@@ -291,6 +299,7 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
           />
         </section>
 
+        {!isTouch && (
         <section className="setting">
           <span className="setting-heading">
             <span>Keyboard shortcuts</span>
@@ -306,6 +315,7 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
             ))}
           </dl>
         </section>
+        )}
 
         <p className="privacy-note">
           🔒 <strong>Your privacy:</strong> camera pictures are analysed inside this

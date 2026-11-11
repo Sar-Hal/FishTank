@@ -1,10 +1,16 @@
 import { hasSavedCalibration, SCENES, useAppStore } from '../state/appStore';
 import type { SceneId } from '../state/appStore';
-import { DISPLAY_PRESETS, guessPresetIndex } from './displayPresets';
+import { detectDevice, DISPLAY_PRESETS, guessPresetIndex, typicalDistanceCm } from './displayPresets';
+
+const DEVICE = detectDevice();
 
 const STEPS = [
   { icon: '📷', title: 'Allow your camera', text: 'It only looks for your face. Nothing is recorded or uploaded.' },
-  { icon: '🪑', title: 'Sit back a little', text: 'About 45 cm away, roughly the length of your forearm and hand.' },
+  DEVICE === 'phone'
+    ? { icon: '🤳', title: 'Hold it like a selfie', text: 'About 30 cm from your face, held steady. Works upright or sideways.' }
+    : DEVICE === 'tablet'
+      ? { icon: '📱', title: 'Prop it up', text: 'About 40 cm away, on a stand or held steady. Works upright or sideways.' }
+      : { icon: '🪑', title: 'Sit back a little', text: 'About 45 cm away, roughly the length of your forearm and hand.' },
   { icon: '👀', title: 'Move your head', text: 'Lean left, right, up and down to peek around inside the screen.' },
 ];
 
@@ -19,7 +25,11 @@ export function Landing() {
     if (!hasSavedCalibration()) {
       const detected = DISPLAY_PRESETS[guessPresetIndex()];
       if (detected.widthCm > 0) {
-        setCalibration({ widthCm: detected.widthCm, heightCm: detected.heightCm });
+        setCalibration({
+          widthCm: detected.widthCm,
+          heightCm: detected.heightCm,
+          distanceCm: typicalDistanceCm(DEVICE),
+        });
       }
     }
     setScene(sceneId);
@@ -54,8 +64,10 @@ export function Landing() {
                 {step.icon}
               </span>
               <span className="step-number">{index + 1}</span>
-              <strong>{step.title}</strong>
-              <p>{step.text}</p>
+              <span className="step-text">
+                <strong>{step.title}</strong>
+                <p>{step.text}</p>
+              </span>
             </li>
           ))}
         </ol>
