@@ -85,6 +85,7 @@ function buildScreen(view: FeedbackView, content: THREE.ShaderMaterial): ScreenP
     color: 0x02060c,
     metalness: 0.7,
     roughness: 0.4,
+    envMapIntensity: 0.3,
   });
 
   const barX = new THREE.BoxGeometry(width + bezel * 2, bezel, depth);
@@ -135,13 +136,26 @@ function disposeScreen(parts: ScreenParts): void {
   parts.frame.dispose();
 }
 
+/**
+ * Matte, non-reflective surface for the room. Shiny metal here picked up the
+ * engine's boxy reflection backdrop as hard grey wedges on the floor and walls.
+ */
+function roomMaterial(color: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0,
+    roughness: 1,
+    envMapIntensity: 0,
+  });
+}
+
 export function createMirror(): Environment {
   const group = new THREE.Group();
 
   // ── Gallery shell ──────────────────────────────────────────────────────
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM.width, ROOM.depth),
-    new THREE.MeshStandardMaterial({ color: 0x04070d, metalness: 0.92, roughness: 0.26 }),
+    roomMaterial(0x05080e),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, FLOOR_Y, -ROOM.depth / 2);
@@ -149,17 +163,13 @@ export function createMirror(): Environment {
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM.width, ROOM.depth),
-    new THREE.MeshStandardMaterial({ color: 0x04080e, metalness: 0.35, roughness: 0.72 }),
+    roomMaterial(0x04070c),
   );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, CEILING_Y, -ROOM.depth / 2);
   group.add(ceiling);
 
-  const wallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x050a12,
-    metalness: 0.55,
-    roughness: 0.48,
-  });
+  const wallMaterial = roomMaterial(0x05080e);
   for (const side of [-1, 1]) {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.depth, ROOM.height), wallMaterial);
     wall.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2;
@@ -169,7 +179,7 @@ export function createMirror(): Environment {
 
   const back = new THREE.Mesh(
     new THREE.PlaneGeometry(ROOM.width, ROOM.height),
-    new THREE.MeshStandardMaterial({ color: 0x03060b, metalness: 0.4, roughness: 0.62 }),
+    roomMaterial(0x03050a),
   );
   back.position.set(0, 0, BACK_Z);
   group.add(back);

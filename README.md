@@ -9,8 +9,9 @@ Built with React 19, Three.js and MediaPipe's on-device face detector. The proje
 ## What's inside
 
 - **On-device head tracking** — BlazeFace short-range via MediaPipe. No video leaves the machine.
+- **Tank-sized scenes** — each scene is scaled so its floor sits on the bottom edge of your real screen, like a diorama right behind the glass, with props placed close to the glass for strong parallax.
 - **Off-axis projection** — move your head and genuinely see around objects, through the window edges, and into the scene.
-- **Four environments** — a living aquarium with animated fish and bubbles, a warm study corridor, a neon reactor chamber, and Infinity: a screen that shows itself forever (no screen-share permission needed — the engine feeds each finished frame back into the scene).
+- **Four environments** — an aquarium with fish, jellyfish, swaying kelp and rippling light on the sand; a cosy study; a neon reactor chamber with crystals and a sweeping scanner; and Infinity: a screen that shows itself forever (no screen-share permission needed — the engine feeds each finished frame back into the scene).
 - **Red / cyan stereo** — optional dual-pass anaglyph rendering using a 6.3 cm inter-pupillary distance.
 - **Settings drawer** — screen size (auto-guessed), sitting distance, movement strength and a bank-card ruler, all adjusted live over the scene. Settings persist locally.
 - **Debug frustum view** — an isometric diagram of the screen, eye position and viewing frustum.
@@ -43,7 +44,7 @@ npm test
 
 | Input | Action |
 | --- | --- |
-| `1` / `2` / `3` / `4` | Aquarium / Corridor / Cyber / Infinity scene |
+| `1` / `2` / `3` / `4` | Aquarium / Study / Cyber / Infinity scene |
 | `C` | Recenter the view on the current head position |
 | `S` | Toggle red / cyan stereo |
 | `O` | Open or close settings |

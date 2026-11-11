@@ -16,8 +16,13 @@ function createShellMaterial(repeatX: number, repeatY: number): THREE.MeshStanda
     emissive: 0x0e7490,
     emissiveMap: texture,
     emissiveIntensity: 0.36,
-    roughness: 0.32,
-    metalness: 0.72,
+    // Rougher than before so the point lights spread into soft glows instead
+    // of blown-out spots on the floor and ceiling.
+    roughness: 0.62,
+    metalness: 0.5,
+    // Keep the shine but stop it mirroring the engine's boxy reflection
+    // backdrop, which showed up as hard grey patches when you moved.
+    envMapIntensity: 0.12,
   });
 }
 
@@ -223,6 +228,75 @@ export function createCyber(): Environment {
     group.add(pylon);
   }
 
+  // ── Right behind the glass ──────────────────────────────────────────────
+  // Small glowing crystals hovering just behind the screen. Being so close,
+  // they slide around a lot as you move your head.
+  const crystalColors = [0x22d3ee, 0xf43f5e, 0xa78bfa, 0x34d399, 0x22d3ee, 0xfbbf24];
+  const crystals = crystalColors.map((color, index) => {
+    const crystal = new THREE.Group();
+    const solid = new THREE.Mesh(
+      new THREE.OctahedronGeometry(5 + (index % 3) * 1.6, 0),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.9,
+        metalness: 0.3,
+        roughness: 0.25,
+        flatShading: true,
+      }),
+    );
+    solid.scale.y = 1.6;
+    crystal.add(solid);
+    const shell = new THREE.Mesh(
+      new THREE.OctahedronGeometry(8 + (index % 3) * 1.6, 0),
+      new THREE.MeshBasicMaterial({
+        color,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    shell.scale.y = 1.6;
+    crystal.add(shell);
+    const angle = (index / crystalColors.length) * Math.PI * 2;
+    crystal.userData.base = new THREE.Vector3(
+      Math.cos(angle) * 120,
+      Math.sin(angle) * 40 - 10,
+      -45 - (index % 3) * 28,
+    );
+    group.add(crystal);
+    return crystal;
+  });
+
+  // A scanning frame sweeps from the back of the chamber toward the glass.
+  const scanMaterial = new THREE.LineBasicMaterial({
+    color: 0x67e8f9,
+    transparent: true,
+    opacity: 0.8,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const scan = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(CHAMBER.width - 4, CHAMBER.height - 4)),
+    scanMaterial,
+  );
+  group.add(scan);
+  const scanFill = new THREE.Mesh(
+    new THREE.PlaneGeometry(CHAMBER.width - 4, CHAMBER.height - 4),
+    new THREE.MeshBasicMaterial({
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.03,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  scan.add(scanFill);
+  const SCAN_PERIOD = 6;
+
   // ── Floating particles ──────────────────────────────────────────────────
   const particleCount = 260;
   const particlePositions = new Float32Array(particleCount * 3);
@@ -264,7 +338,28 @@ export function createCyber(): Environment {
     group,
     background: new THREE.Color(0x030712),
     fog: new THREE.Fog(0x030712, 480, 1600),
+    // Floor on the bottom edge of the screen, core in view, ceiling above.
+    window: { bottom: FLOOR_Y, top: 55 },
     update: (dt, elapsed) => {
+      for (let i = 0; i < crystals.length; i += 1) {
+        const crystal = crystals[i];
+        const base = crystal.userData.base as THREE.Vector3;
+        crystal.position.set(
+          base.x + Math.sin(elapsed * 0.4 + i) * 10,
+          base.y + Math.sin(elapsed * 0.9 + i * 1.3) * 8,
+          base.z,
+        );
+        crystal.rotation.y += dt * (0.6 + i * 0.07);
+        crystal.children[1].rotation.y -= dt * 0.9;
+      }
+
+      // Sweep back-to-front, fading in at the back and out near the glass.
+      const progress = (elapsed % SCAN_PERIOD) / SCAN_PERIOD;
+      scan.position.z = BACK_Z + 20 + progress * (-BACK_Z - 40);
+      const fade = Math.sin(progress * Math.PI);
+      scanMaterial.opacity = 0.75 * fade;
+      (scanFill.material as THREE.MeshBasicMaterial).opacity = 0.035 * fade;
+
       core.rotation.y += dt * 0.32;
       core.rotation.x = Math.sin(elapsed * 0.45) * 0.28;
       wire.rotation.y -= dt * 0.2;

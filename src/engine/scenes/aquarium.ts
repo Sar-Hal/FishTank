@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Environment } from './types';
-import { createSandTexture, createWaterTexture } from './textures';
+import { createCausticTexture, createSandTexture, createWaterTexture } from './textures';
 
 const TANK = {
   width: 720,
@@ -24,9 +24,19 @@ interface Fish {
   previous: THREE.Vector3;
 }
 
+interface Jellyfish {
+  group: THREE.Group;
+  bell: THREE.Mesh;
+  tentacles: THREE.Mesh[];
+  phase: number;
+  base: THREE.Vector3;
+}
+
 interface Seaweed {
   mesh: THREE.Mesh;
-  baseRotation: number;
+  /** Undisturbed vertex positions; sway is applied on top each frame. */
+  rest: Float32Array;
+  height: number;
   phase: number;
 }
 
@@ -167,6 +177,129 @@ function createCoral(radius: number, height: number, color: number): THREE.Group
   return group;
 }
 
+function createJellyfish(size: number, color: number, base: THREE.Vector3, phase: number): Jellyfish {
+  const group = new THREE.Group();
+  const bellMaterial = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.55,
+    transparent: true,
+    opacity: 0.62,
+    roughness: 0.25,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const bell = new THREE.Mesh(
+    new THREE.SphereGeometry(size, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+    bellMaterial,
+  );
+  bell.scale.y = 0.8;
+  group.add(bell);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(size * 0.45, 12, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  glow.position.y = size * 0.25;
+  group.add(glow);
+
+  const tentacleMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+  const tentacles: THREE.Mesh[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const length = size * (1.6 + Math.random() * 1.4);
+    const geometry = new THREE.CylinderGeometry(size * 0.035, size * 0.012, length, 4);
+    geometry.translate(0, -length / 2, 0);
+    const tentacle = new THREE.Mesh(geometry, tentacleMaterial);
+    const angle = (i / 7) * Math.PI * 2;
+    tentacle.position.set(Math.cos(angle) * size * 0.6, 0, Math.sin(angle) * size * 0.6);
+    group.add(tentacle);
+    tentacles.push(tentacle);
+  }
+
+  group.position.copy(base);
+  return { group, bell, tentacles, phase, base: base.clone() };
+}
+
+function createStarfish(size: number, color: number): THREE.Mesh {
+  const shape = new THREE.Shape();
+  for (let i = 0; i <= 10; i += 1) {
+    const angle = (i / 10) * Math.PI * 2 + Math.PI / 2;
+    const radius = i % 2 === 0 ? size : size * 0.42;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  const star = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(shape, {
+      depth: size * 0.18,
+      bevelEnabled: true,
+      bevelSize: size * 0.08,
+      bevelThickness: size * 0.08,
+      bevelSegments: 2,
+    }),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
+  );
+  star.rotation.x = -Math.PI / 2;
+  return star;
+}
+
+/**
+ * A flat, tapering ribbon of kelp with its base at y = 0. Its vertices are
+ * bent every frame (see `swayKelp`) so it waves along its length like a real
+ * blade in a current, rather than tilting as a rigid stick.
+ */
+function createKelp(height: number, width: number, material: THREE.Material): Seaweed {
+  const segments = 10;
+  const geometry = new THREE.PlaneGeometry(width, height, 1, segments);
+  geometry.translate(0, height / 2, 0);
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < position.count; i += 1) {
+    // Taper towards a rounded tip.
+    const t = position.getY(i) / height;
+    position.setX(i, position.getX(i) * (1 - t * 0.75));
+  }
+  const mesh = new THREE.Mesh(geometry, material);
+  return {
+    mesh,
+    rest: Float32Array.from(position.array as Float32Array),
+    height,
+    phase: Math.random() * Math.PI * 2,
+  };
+}
+
+function swayKelp(weed: Seaweed, elapsed: number): void {
+  const position = weed.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const array = position.array as Float32Array;
+  for (let i = 0; i < position.count; i += 1) {
+    const y = weed.rest[i * 3 + 1];
+    const t = y / weed.height;
+    // Bend grows towards the tip, and a wave travels up the blade.
+    const bend = t * t * weed.height * 0.16;
+    const wave = elapsed * 1.2 + weed.phase - t * 2.4;
+    array[i * 3] = weed.rest[i * 3] + Math.sin(wave) * bend;
+    array[i * 3 + 2] = weed.rest[i * 3 + 2] + Math.cos(wave * 0.8) * bend * 0.6;
+  }
+  position.needsUpdate = true;
+}
+
+/** Shortest signed angle from `from` to `to`, so turning never spins the long way. */
+export function angleDelta(from: number, to: number): number {
+  const delta = to - from;
+  return Math.atan2(Math.sin(delta), Math.cos(delta));
+}
+
 export function createAquarium(): Environment {
   const group = new THREE.Group();
 
@@ -186,6 +319,33 @@ export function createAquarium(): Environment {
   sand.rotation.x = -Math.PI / 2;
   sand.position.set(0, FLOOR_Y, -TANK.depth / 2);
   group.add(sand);
+
+  // Rippling sunlight on the sand. Two layers drift in different directions
+  // so the pattern keeps changing instead of sliding as one sheet.
+  const causticLayers: THREE.CanvasTexture[] = [];
+  for (const [repeat, opacity] of [
+    [5, 0.22],
+    [7, 0.13],
+  ] as Array<[number, number]>) {
+    const texture = createCausticTexture();
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.repeat.set(repeat, repeat * 0.85);
+    const caustic = new THREE.Mesh(
+      new THREE.PlaneGeometry(TANK.width, TANK.depth),
+      new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xc8f5ff,
+        transparent: true,
+        opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    caustic.rotation.x = -Math.PI / 2;
+    caustic.position.set(0, FLOOR_Y + 0.4 + causticLayers.length * 0.2, -TANK.depth / 2);
+    group.add(caustic);
+    causticLayers.push(texture);
+  }
 
   const backMaterial = new THREE.MeshStandardMaterial({
     map: waterTexture,
@@ -272,19 +432,24 @@ export function createAquarium(): Environment {
     roughness: 0.68,
     side: THREE.DoubleSide,
   });
+  const seaweedLightMaterial = seaweedMaterial.clone();
+  seaweedLightMaterial.color.set(0x4cc38a);
+  const addKelp = (x: number, z: number, height: number, width: number, light: boolean) => {
+    const blade = createKelp(height, width, light ? seaweedLightMaterial : seaweedMaterial);
+    blade.mesh.position.set(x, FLOOR_Y, z);
+    blade.mesh.rotation.y = Math.random() * Math.PI;
+    group.add(blade.mesh);
+    seaweeds.push(blade);
+  };
+
   for (let i = 0; i < 26; i += 1) {
-    const height = 45 + Math.random() * 70;
-    const blade = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.8, 2.2, height, 4),
-      seaweedMaterial,
+    addKelp(
+      (Math.random() - 0.5) * TANK.width * 0.85,
+      -170 - Math.random() * (TANK.depth - 190),
+      45 + Math.random() * 70,
+      7 + Math.random() * 5,
+      i % 3 === 0,
     );
-    const x = (Math.random() - 0.5) * TANK.width * 0.85;
-    const z = -170 - Math.random() * (TANK.depth - 190);
-    blade.position.set(x, FLOOR_Y + height / 2, z);
-    const baseRotation = (Math.random() - 0.5) * 0.38;
-    blade.rotation.z = baseRotation;
-    group.add(blade);
-    seaweeds.push({ mesh: blade, baseRotation, phase: Math.random() * Math.PI * 2 });
   }
 
   // Foreground kelp frames the window; it swings with parallax as you move.
@@ -293,17 +458,37 @@ export function createAquarium(): Environment {
     [82, -160, 108],
     [-172, -330, 126],
     [184, -380, 118],
+    [-120, -90, 70],
+    [150, -100, 62],
   ] as Array<[number, number, number]>) {
-    const blade = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.7, 2, height, 5),
-      seaweedMaterial,
-    );
-    blade.position.set(x, FLOOR_Y + height / 2, z);
-    const baseRotation = (x < 0 ? 1 : -1) * 0.08;
-    blade.rotation.z = baseRotation;
-    group.add(blade);
-    seaweeds.push({ mesh: blade, baseRotation, phase: Math.random() * Math.PI * 2 });
+    addKelp(x, z, height, 10, x > 0);
   }
+
+  // ── Right behind the glass ──────────────────────────────────────────────
+  // Close objects shift the most when you move your head, which is what
+  // sells the "tank behind the screen" illusion.
+  for (const [x, z, radius, color] of [
+    [-150, -70, 16, 0x3b5563],
+    [130, -55, 12, 0x34495a],
+    [-60, -40, 7, 0x4a6272],
+  ] as Array<[number, number, number, number]>) {
+    group.add(createRock(radius, new THREE.Vector3(x, FLOOR_Y + radius * 0.4, z), color));
+  }
+  const starfish = createStarfish(9, 0xfb923c);
+  starfish.position.set(-150, FLOOR_Y + 16 * 0.78, -70);
+  starfish.rotation.z = 0.4;
+  group.add(starfish);
+  const starfishTwo = createStarfish(6, 0xf472b6);
+  starfishTwo.position.set(40, FLOOR_Y + 0.6, -48);
+  starfishTwo.rotation.z = -0.9;
+  group.add(starfishTwo);
+
+  const jellyfish: Jellyfish[] = [
+    createJellyfish(9, 0xc084fc, new THREE.Vector3(-90, 10, -95), 0),
+    createJellyfish(6.5, 0xf9a8d4, new THREE.Vector3(105, -20, -75), 2.1),
+    createJellyfish(11, 0x7dd3fc, new THREE.Vector3(40, 30, -210), 4.2),
+  ];
+  for (const jelly of jellyfish) group.add(jelly.group);
 
   // ── Fish ────────────────────────────────────────────────────────────────
   const palette = [
@@ -326,6 +511,24 @@ export function createAquarium(): Environment {
     const startX = Math.sin(fish.phase) * fish.rangeX;
     const startZ = fish.baseZ + Math.cos(fish.phase) * fish.driftZ;
     fish.group.position.set(startX, fish.baseY, startZ);
+    fish.previous.copy(fish.group.position);
+    group.add(fish.group);
+    fishes.push(fish);
+  }
+
+  // A few small fish that cruise right past the glass.
+  for (const [seed, z, color] of [
+    [101, -45, palette[1]],
+    [102, -65, palette[4]],
+    [103, -88, palette[7]],
+  ] as Array<[number, number, (typeof palette)[number]]>) {
+    const fish = createFish(9 + (seed % 3) * 2, color.body, color.accent, seed);
+    fish.baseZ = z;
+    fish.driftZ = 8;
+    fish.rangeX = 120;
+    fish.baseY = -40 + (seed % 3) * 22;
+    fish.speed = 0.22 + (seed % 3) * 0.04;
+    fish.group.position.set(Math.sin(fish.phase) * fish.rangeX, fish.baseY, z);
     fish.previous.copy(fish.group.position);
     group.add(fish.group);
     fishes.push(fish);
@@ -401,7 +604,28 @@ export function createAquarium(): Environment {
     group,
     background: new THREE.Color(0x063b50),
     fog: new THREE.Fog(0x063b50, 300, 1050),
+    // Sand sits on the bottom edge of the screen; duck down to see the surface.
+    window: { bottom: FLOOR_Y, top: 40 },
     update: (dt, elapsed) => {
+      causticLayers[0].offset.set(elapsed * 0.012, elapsed * 0.008);
+      causticLayers[1].offset.set(-elapsed * 0.009, elapsed * 0.014);
+
+      // Jellyfish pulse: the bell squeezes, and each squeeze pushes it upward.
+      for (const jelly of jellyfish) {
+        const t = elapsed * 1.3 + jelly.phase;
+        const squeeze = Math.max(0, Math.sin(t));
+        jelly.bell.scale.set(1 - squeeze * 0.16, 0.8 + squeeze * 0.14, 1 - squeeze * 0.16);
+        jelly.group.position.set(
+          jelly.base.x + Math.sin(elapsed * 0.17 + jelly.phase) * 22,
+          jelly.base.y + Math.sin(elapsed * 0.32 + jelly.phase) * 16 - Math.cos(t) * 2,
+          jelly.base.z + Math.cos(elapsed * 0.13 + jelly.phase) * 10,
+        );
+        for (let i = 0; i < jelly.tentacles.length; i += 1) {
+          jelly.tentacles[i].rotation.x = Math.sin(t - 0.8 + i) * 0.18;
+          jelly.tentacles[i].rotation.z = Math.cos(t * 0.8 - 0.8 + i * 1.3) * 0.18;
+        }
+      }
+
       // Fish swim along gentle Lissajous paths.
       for (const fish of fishes) {
         const angle = elapsed * fish.speed + fish.phase;
@@ -413,7 +637,8 @@ export function createAquarium(): Environment {
         const dz = z - fish.previous.z;
         if (Math.abs(dx) + Math.abs(dz) > 1e-4) {
           const targetYaw = Math.atan2(-dz, dx);
-          fish.group.rotation.y += (targetYaw - fish.group.rotation.y) * Math.min(1, dt * 4);
+          fish.group.rotation.y +=
+            angleDelta(fish.group.rotation.y, targetYaw) * Math.min(1, dt * 4);
         }
 
         fish.group.position.set(x, y, z);
@@ -445,8 +670,7 @@ export function createAquarium(): Environment {
 
       // Seaweed sway
       for (const weed of seaweeds) {
-        weed.mesh.rotation.z =
-          weed.baseRotation + Math.sin(elapsed * 1.15 + weed.phase) * 0.12;
+        swayKelp(weed, elapsed);
       }
 
       // Slight lateral drift keeps the god rays alive.

@@ -250,3 +250,30 @@ export function createGridTexture(size = 512): THREE.CanvasTexture {
     }
   });
 }
+
+/**
+ * Tileable web of bright wavy lines, like sunlight focused by ripples onto the
+ * sand. Integer frequencies keep it seamless when repeated.
+ */
+export function createCausticTexture(size = 256): THREE.CanvasTexture {
+  return canvasTexture(size, (ctx, s) => {
+    const image = ctx.createImageData(s, s);
+    const tau = Math.PI * 2;
+    for (let y = 0; y < s; y += 1) {
+      for (let x = 0; x < s; x += 1) {
+        const u = x / s;
+        const v = y / s;
+        const a = Math.abs(Math.sin(tau * (3 * u + 0.45 * Math.sin(tau * (2 * v + u)))));
+        const b = Math.abs(Math.sin(tau * (3 * v + 0.45 * Math.sin(tau * (2 * u - v)))));
+        const line = Math.pow(1 - Math.min(a, b), 7);
+        const value = Math.round(Math.min(1, line * 1.4) * 255);
+        const index = (y * s + x) * 4;
+        image.data[index] = value;
+        image.data[index + 1] = value;
+        image.data[index + 2] = value;
+        image.data[index + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  });
+}

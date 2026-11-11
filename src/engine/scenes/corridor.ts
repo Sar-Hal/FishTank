@@ -411,6 +411,91 @@ export function createCorridor(): Environment {
   rug.position.set(0, FLOOR_Y + 0.5, -530);
   group.add(rug);
 
+  // ── Right behind the glass ──────────────────────────────────────────────
+  // Close props move the most as you lean, which makes the room feel real.
+  const plant = new THREE.Group();
+  const pot = new THREE.Mesh(
+    new THREE.CylinderGeometry(13, 10, 24, 20),
+    new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.8 }),
+  );
+  pot.position.y = 12;
+  plant.add(pot);
+  const soil = new THREE.Mesh(
+    new THREE.CylinderGeometry(12, 12, 1, 20),
+    new THREE.MeshStandardMaterial({ color: 0x2b1a0e, roughness: 1 }),
+  );
+  soil.position.y = 23.6;
+  plant.add(soil);
+  const leafMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2f7d4a,
+    roughness: 0.6,
+    side: THREE.DoubleSide,
+  });
+  const leaves: THREE.Object3D[] = [];
+  for (let i = 0; i < 9; i += 1) {
+    const stem = new THREE.Object3D();
+    stem.position.y = 24;
+    stem.rotation.y = (i / 9) * Math.PI * 2;
+    stem.rotation.z = 0.35 + (i % 3) * 0.22;
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), leafMaterial);
+    const length = 22 + (i % 4) * 6;
+    leaf.scale.set(5, length / 2, 0.6);
+    leaf.position.y = length / 2;
+    stem.add(leaf);
+    plant.add(stem);
+    leaves.push(stem);
+  }
+  plant.position.set(-120, FLOOR_Y, -75);
+  group.add(plant);
+
+  const bookColors = [0x1e3a8a, 0x9f1239, 0x065f46, 0xb45309];
+  const books = new THREE.Group();
+  let stackY = 0;
+  bookColors.forEach((color, index) => {
+    const thickness = 5 + (index % 2) * 2;
+    const book = new THREE.Mesh(
+      new THREE.BoxGeometry(34 - index * 3, thickness, 24 - index * 2),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.6 }),
+    );
+    book.position.y = stackY + thickness / 2;
+    book.rotation.y = (index % 2 === 0 ? 1 : -1) * 0.12 * index;
+    books.add(book);
+    stackY += thickness;
+  });
+
+  const candle = new THREE.Mesh(
+    new THREE.CylinderGeometry(3, 3, 14, 16),
+    new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.7 }),
+  );
+  candle.position.set(4, stackY + 7, 2);
+  books.add(candle);
+  const flame = new THREE.Mesh(
+    new THREE.SphereGeometry(1.6, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false }),
+  );
+  flame.scale.y = 1.9;
+  flame.position.set(4, stackY + 16.5, 2);
+  books.add(flame);
+  const flameGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(7, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xffb347,
+      transparent: true,
+      opacity: 0.12,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  flameGlow.position.copy(flame.position);
+  books.add(flameGlow);
+  const candleLight = new THREE.PointLight(0xffb45c, 1.1, 220, 0);
+  candleLight.position.set(4, stackY + 20, 2);
+  books.add(candleLight);
+
+  books.position.set(115, FLOOR_Y, -65);
+  books.rotation.y = -0.3;
+  group.add(books);
+
   // ── Dust motes ──────────────────────────────────────────────────────────
   const dustCount = 170;
   const dustPositions = new Float32Array(dustCount * 3);
@@ -449,7 +534,18 @@ export function createCorridor(): Environment {
     group,
     background: new THREE.Color(0x120d08),
     fog: new THREE.Fog(0x120d08, 460, 1250),
+    // Floor on the bottom edge of the screen; the beams and lamp hang above.
+    window: { bottom: FLOOR_Y, top: 45 },
     update: (dt, elapsed) => {
+      // Candle flicker and a gentle sway on the plant.
+      const flicker = Math.sin(elapsed * 13) * 0.08 + Math.sin(elapsed * 23.7) * 0.05;
+      flame.scale.set(1 - flicker * 0.5, 1.9 + flicker * 2, 1 - flicker * 0.5);
+      flameGlow.material.opacity = 0.12 + flicker * 0.3;
+      candleLight.intensity = 1.05 + flicker * 2.2;
+      for (let i = 0; i < leaves.length; i += 1) {
+        leaves[i].rotation.x = Math.sin(elapsed * 0.9 + i * 1.7) * 0.05;
+      }
+
       sphere.rotation.y += dt * 0.25;
       sphere.rotation.x = Math.sin(elapsed * 0.2) * 0.12;
 

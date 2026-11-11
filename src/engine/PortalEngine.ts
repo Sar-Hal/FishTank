@@ -8,10 +8,17 @@ import { createCorridor } from './scenes/corridor';
 import { createCyber } from './scenes/cyber';
 import { createMirror } from './scenes/mirror';
 import { disposeObject } from './scenes/utils';
-import type { Environment } from './scenes/types';
+import type { Environment, SceneWindow } from './scenes/types';
 
 export interface PortalEngineOptions {
   onFps?: (fps: number) => void;
+}
+
+/** Scale that makes `window` fill a screen `heightCm` tall. */
+export function windowScale(window: SceneWindow, heightCm: number): number {
+  const span = window.top - window.bottom;
+  if (!(span > 0) || !(heightCm > 0)) return 1;
+  return heightCm / span;
 }
 
 const createEnvironment = (sceneId: SceneId): Environment => {
@@ -128,13 +135,44 @@ export class PortalEngine {
     this.environment = environment;
     this.scene.add(environment.group);
     this.scene.background = environment.background;
-    this.scene.fog = environment.fog;
+    this.fitEnvironment();
     this.syncFeedback();
   }
 
   setCalibration(calibration: Calibration): void {
     this.calibration = { ...calibration };
+    this.fitEnvironment();
     this.syncFeedback();
+  }
+
+  /**
+   * Scale scenes that declare a `window` so it fills the real screen. Things
+   * that don't scale with the group (fog, light reach, point sizes) are scaled
+   * from their original values so this can be re-run when calibration changes.
+   */
+  private fitEnvironment(): void {
+    const environment = this.environment;
+    if (!environment) return;
+
+    const window = environment.window;
+    const scale = window ? windowScale(window, this.calibration.heightCm) : 1;
+    const group = environment.group;
+    group.scale.setScalar(scale);
+    group.position.y = window ? -((window.top + window.bottom) / 2) * scale : 0;
+
+    group.traverse((object) => {
+      if (object instanceof THREE.PointLight || object instanceof THREE.SpotLight) {
+        object.userData.baseDistance ??= object.distance;
+        object.distance = object.userData.baseDistance * scale;
+      } else if (object instanceof THREE.Points) {
+        const material = object.material as THREE.PointsMaterial;
+        material.userData.baseSize ??= material.size;
+        material.size = material.userData.baseSize * scale;
+      }
+    });
+
+    const fog = environment.fog;
+    this.scene.fog = fog ? new THREE.Fog(fog.color, fog.near * scale, fog.far * scale) : null;
   }
 
   setStereo(stereo: boolean): void {

@@ -32,7 +32,7 @@ export const SCENES: ReadonlyArray<{
   hint: string;
 }> = [
   { id: 'aquarium', label: 'Aquarium', icon: '🐠', hint: 'Fish swimming behind your screen' },
-  { id: 'corridor', label: 'Corridor', icon: '🏛️', hint: 'A long, warmly lit hallway' },
+  { id: 'corridor', label: 'Study', icon: '📚', hint: 'A cosy study with a glowing doorway' },
   { id: 'cyber', label: 'Cyber', icon: '⚡', hint: 'A glowing sci-fi room' },
   { id: 'mirror', label: 'Infinity', icon: '🪞', hint: 'Your screen, inside your screen, forever' },
 ];
