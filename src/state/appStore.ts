@@ -42,6 +42,8 @@ interface AppState {
   calibration: Calibration;
   scene: SceneId;
   stereo: boolean;
+  /** Master switch for the camera. Off means the camera is fully released. */
+  trackingEnabled: boolean;
   /** Shows the head-position numbers and frustum diagram. */
   stats: boolean;
   pipCollapsed: boolean;
@@ -52,6 +54,7 @@ interface AppState {
   setCalibration: (value: Partial<Calibration>) => void;
   setScene: (scene: SceneId) => void;
   setStereo: (stereo: boolean) => void;
+  setTrackingEnabled: (enabled: boolean) => void;
   setStats: (stats: boolean) => void;
   setPipCollapsed: (collapsed: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -129,6 +132,7 @@ export const useAppStore = create<AppState>((set) => ({
   calibration: saved.calibration ?? DEFAULT_CALIBRATION,
   scene: saved.scene ?? 'aquarium',
   stereo: false,
+  trackingEnabled: true,
   stats: false,
   pipCollapsed: false,
   settingsOpen: false,
@@ -150,6 +154,7 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   setStereo: (stereo) => set({ stereo }),
+  setTrackingEnabled: (trackingEnabled) => set({ trackingEnabled }),
   setStats: (stats) => set({ stats }),
   setPipCollapsed: (pipCollapsed) => set({ pipCollapsed }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),

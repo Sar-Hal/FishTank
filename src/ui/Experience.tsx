@@ -104,9 +104,24 @@ export function Experience() {
       },
     });
 
-    void service.start();
+    // Privacy: the camera runs only while this tab is visible and tracking is
+    // switched on. Both pause() and resume() are safe to call repeatedly.
+    const cameraWanted = () => useAppStore.getState().trackingEnabled && !document.hidden;
+    const syncCamera = () => {
+      if (cameraWanted()) service.resume();
+      else service.pause();
+    };
+
+    // Respect the switch from the very first frame, even after leaving and
+    // re-entering: never open the camera if it is switched off.
+    if (cameraWanted()) void service.start();
+    else service.pause();
+    document.addEventListener('visibilitychange', syncCamera);
+    const unsubscribe = useAppStore.subscribe(syncCamera);
 
     return () => {
+      document.removeEventListener('visibilitychange', syncCamera);
+      unsubscribe();
       service.stop();
       engine.dispose();
       engineRef.current = null;
@@ -153,16 +168,17 @@ export function Experience() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) return;
 
+      // Leave keys alone while typing into a field. Checkboxes and sliders keep
+      // focus after being clicked, so they must not swallow shortcuts like Esc.
       const target = event.target as HTMLElement | null;
-      if (
+      const inputType = (target as HTMLInputElement | null)?.type;
+      const typing =
         target &&
         (target.isContentEditable ||
-          target.tagName === 'INPUT' ||
           target.tagName === 'SELECT' ||
-          target.tagName === 'TEXTAREA')
-      ) {
-        return;
-      }
+          target.tagName === 'TEXTAREA' ||
+          (target.tagName === 'INPUT' && inputType !== 'checkbox' && inputType !== 'range'));
+      if (typing) return;
 
       const state = useAppStore.getState();
       const key = event.key.toLowerCase();

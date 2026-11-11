@@ -60,6 +60,8 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
   const setOpen = useAppStore((state) => state.setSettingsOpen);
   const calibration = useAppStore((state) => state.calibration);
   const setCalibration = useAppStore((state) => state.setCalibration);
+  const trackingEnabled = useAppStore((state) => state.trackingEnabled);
+  const setTrackingEnabled = useAppStore((state) => state.setTrackingEnabled);
   const stereo = useAppStore((state) => state.stereo);
   const setStereo = useAppStore((state) => state.setStereo);
   const stats = useAppStore((state) => state.stats);
@@ -264,6 +266,12 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
 
         <section className="setting setting--toggles">
           <Toggle
+            label="Camera tracking"
+            hint="Turn off to switch the camera off completely"
+            checked={trackingEnabled}
+            onChange={setTrackingEnabled}
+          />
+          <Toggle
             label="Show camera"
             hint="A small preview of what the camera sees"
             checked={!pipCollapsed}
@@ -298,6 +306,13 @@ export function SettingsPanel({ onRecenter }: { onRecenter: () => void }) {
             ))}
           </dl>
         </section>
+
+        <p className="privacy-note">
+          🔒 <strong>Your privacy:</strong> camera pictures are analysed inside this
+          tab and thrown away straight after. Nothing is recorded, saved or sent
+          anywhere. The camera switches off when you switch tabs, turn tracking off
+          or leave. Only your screen size and settings are saved, on this device.
+        </p>
 
         <button type="button" className="link-button settings-reset" onClick={resetDefaults}>
           Reset everything to defaults

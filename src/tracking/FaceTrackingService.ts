@@ -1,12 +1,11 @@
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 import type { FaceBox, FaceSample, TrackingStatus } from './types';
 
+// Everything the tracker needs is served from this site. There is deliberately
+// no CDN fallback: pulling code from a third party while the camera is on would
+// let that third party run code next to the video.
 const LOCAL_WASM = '/wasm';
 const LOCAL_MODEL = '/models/blaze_face_short_range.tflite';
-
-const CDN_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
-const CDN_MODEL =
-  'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
 
 const MIN_DETECTION_CONFIDENCE = 0.4;
 
@@ -34,6 +33,7 @@ export class FaceTrackingService {
   private stream: MediaStream | null = null;
   private rafId = 0;
   private stopped = false;
+  private paused = false;
   private starting = false;
   private lastVideoTime = -1;
   private frames = 0;
@@ -55,11 +55,48 @@ export class FaceTrackingService {
     return this.stream;
   }
 
-  async start(): Promise<void> {
-    if (this.starting) return;
-    this.starting = true;
-    this.stopped = false;
+  /** True once the service is shut down for good, or the camera is paused. */
+  private get inactive(): boolean {
+    return this.stopped || this.paused;
+  }
 
+  async start(): Promise<void> {
+    if (this.starting || this.stopped) return;
+    this.starting = true;
+    this.paused = false;
+    try {
+      await this.run();
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  /**
+   * Turn the camera off completely (the browser's camera light goes out) while
+   * keeping the loaded model, so `resume()` is quick.
+   */
+  pause(): void {
+    if (this.stopped || this.paused) return;
+    this.paused = true;
+    cancelAnimationFrame(this.rafId);
+    this.stopStream();
+    this.video.pause();
+    this.video.srcObject = null;
+    this.lastVideoTime = -1;
+    this.callbacks.onSample(null);
+    this.callbacks.onDetection?.(null, 640, 480);
+    this.callbacks.onStatus('stopped', 'Camera off');
+  }
+
+  /** Turn the camera back on after `pause()`. Does nothing if not paused. */
+  resume(): void {
+    if (this.stopped || !this.paused) return;
+    // Clear the flag first: if a start is still in flight it will carry on.
+    this.paused = false;
+    void this.start();
+  }
+
+  private async run(): Promise<void> {
     // ── 1. Camera ──────────────────────────────────────────────────────────
     this.callbacks.onStatus('requesting-camera', 'Requesting camera…');
     try {
@@ -69,15 +106,16 @@ export class FaceTrackingService {
       });
     } catch (error) {
       console.error('Camera access failed:', error);
-      if (this.stopped) return;
-      const message = "Fish Tank can't use your camera, so the view won't follow your head. Allow the camera in your browser's address bar, then reload.";
+      if (this.inactive) return;
+      const message =
+        "Fish Tank can't use your camera, so the view won't follow your head. Allow the camera in your browser's address bar, then reload.";
       this.callbacks.onStatus('camera-error', 'Camera unavailable');
       this.callbacks.onError?.(message);
       this.callbacks.onSample(null);
       return;
     }
 
-    if (this.stopped) {
+    if (this.inactive) {
       this.stopStream();
       return;
     }
@@ -86,29 +124,44 @@ export class FaceTrackingService {
     this.callbacks.onStream?.(this.stream);
     await this.video.play().catch(() => undefined);
 
-    if (this.stopped) {
+    if (this.inactive) {
       this.stopStream();
       return;
     }
 
-    // ── 2. Vision model ────────────────────────────────────────────────────
-    this.callbacks.onStatus('loading-model', 'Loading vision model…');
-    try {
-      this.detector = await this.createDetector();
-    } catch (error) {
-      console.error('Face tracking model failed to load:', error);
-      if (this.stopped) return;
-      const message = "Head tracking couldn't start, so the view will stay still. Try reloading the page.";
-      this.callbacks.onStatus('model-error', 'Tracking unavailable');
-      this.callbacks.onError?.(message);
-      this.callbacks.onSample(null);
-      return;
+    // ── 2. Vision model (loaded once, kept across pauses) ──────────────────
+    if (!this.detector) {
+      this.callbacks.onStatus('loading-model', 'Loading vision model…');
+      let detector: FaceDetector;
+      try {
+        detector = await this.createDetector();
+      } catch (error) {
+        console.error('Face tracking model failed to load:', error);
+        if (this.inactive) return;
+        const message =
+          "Head tracking couldn't start, so the view will stay still. Try reloading the page.";
+        this.stopStream();
+        this.callbacks.onStatus('model-error', 'Tracking unavailable');
+        this.callbacks.onError?.(message);
+        this.callbacks.onSample(null);
+        return;
+      }
+
+      if (this.stopped) {
+        detector.close();
+        this.stopStream();
+        return;
+      }
+      this.detector = detector;
+      if (this.paused) {
+        this.stopStream();
+        return;
+      }
     }
 
-    if (this.stopped) {
-      this.detector.close();
-      this.detector = null;
-      this.stopStream();
+    // A pause/resume during model loading closes the stream; reopen it.
+    if (!this.stream) {
+      await this.run();
       return;
     }
 
@@ -145,19 +198,11 @@ export class FaceTrackingService {
   }
 
   private async createDetector(): Promise<FaceDetector> {
-    let vision: Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>;
-
-    try {
-      vision = await FilesetResolver.forVisionTasks(LOCAL_WASM);
-    } catch (error) {
-      console.warn('Local MediaPipe WASM unavailable, falling back to CDN.', error);
-      vision = await FilesetResolver.forVisionTasks(CDN_WASM);
-    }
+    const vision = await FilesetResolver.forVisionTasks(LOCAL_WASM);
 
     const attempts: Array<{ modelAssetPath: string; delegate: 'GPU' | 'CPU' }> = [
       { modelAssetPath: LOCAL_MODEL, delegate: 'GPU' },
       { modelAssetPath: LOCAL_MODEL, delegate: 'CPU' },
-      { modelAssetPath: CDN_MODEL, delegate: 'CPU' },
     ];
 
     let lastError: unknown = null;
@@ -184,9 +229,9 @@ export class FaceTrackingService {
   }
 
   private loop = (): void => {
-    if (this.stopped) return;
+    if (this.inactive) return;
 
-    if (this.detector && this.video.readyState >= 2) {
+    if (this.detector && !this.paused && this.video.readyState >= 2) {
       // Only run detection when the camera has produced a new frame.
       if (this.video.currentTime !== this.lastVideoTime) {
         this.lastVideoTime = this.video.currentTime;

@@ -79,6 +79,19 @@ src/
 
 The engine lives outside React's render cycle. `Experience` creates one `PortalEngine` and one `FaceTrackingService` per mount, pushes scene/stereo/calibration changes through setters, and sends head samples straight to the engine. React only re-renders for UI state; the 10 Hz telemetry store feeds the HUD.
 
-## Privacy
+## Privacy and security
 
-All tracking runs locally in the browser. The camera stream is used only by the face detector and the preview, is never recorded, and is released when you leave the experience.
+Fish Tank looks at your webcam, so it is built to keep that video inside your browser tab.
+
+**What happens to the camera**
+- Each camera picture is analysed on your device by a small face detector, which only reports where your face is. The picture is then thrown away. Nothing is recorded, saved, uploaded or shared (there is no recording code, and no analytics or tracking of any kind).
+- The camera is switched on only after you enter the experience. It switches off when you leave, when you switch to another tab or minimise the window, and whenever you turn off **Settings → Camera tracking**. The browser's camera light goes out each time.
+- If you deny the camera, the app still works with a still view.
+- Only your screen size, sitting distance, sensitivity and last scene are saved, in this browser's local storage. No face data is ever stored.
+
+**How the site is locked down** (`vercel.json`, also used by `npm run preview` so it can be tested locally)
+- **No third parties.** The face detector, its WebAssembly runtime and the model are all served from this site's own files. There is no CDN fallback, and a Content Security Policy blocks any request to another site, any inline script and any other site embedding the page.
+- **Camera permission is for this site only.** A Permissions-Policy header allows the camera for the page itself and denies the microphone, location, screen capture and other sensors.
+- **Other headers:** `no-referrer`, `nosniff`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` and HSTS.
+- **Face-detector files are verified.** The files in `public/wasm` are identical to the ones in the official `@mediapipe/tasks-vision` npm package. If you upgrade that package, copy the matching files from `node_modules/@mediapipe/tasks-vision/wasm` into `public/wasm`.
+- **Dependencies:** `npm audit --omit=dev` reports no known vulnerabilities in anything shipped to visitors. The remaining `npm audit` findings are in development tools (`vitest`, `vite`) that only run on a developer's machine.

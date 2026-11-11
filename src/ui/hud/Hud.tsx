@@ -36,6 +36,8 @@ function describeStatus(status: TrackingStatus, faceVisible: boolean): { label: 
       return { label: 'No camera, still view', tone: 'error' };
     case 'model-error':
       return { label: 'Tracking failed, still view', tone: 'error' };
+    case 'stopped':
+      return { label: 'Camera off', tone: 'idle' };
     default:
       return { label: 'Paused', tone: 'idle' };
   }

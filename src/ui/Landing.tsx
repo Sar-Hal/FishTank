@@ -80,7 +80,7 @@ export function Landing() {
       </div>
 
       <footer className="landing-footer">
-        Works best in Chrome or Edge, with a webcam. 🔒 Everything stays on your device.
+        Works best in Chrome or Edge, with a webcam. 🔒 Your camera is never recorded or sent anywhere, and it switches off when you leave or switch tabs.
       </footer>
     </main>
   );
